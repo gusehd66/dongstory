@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <title>2D Map Test</title>
+  </head>
+  <body>
+    <div id="game-shell">
+      <aside id="floor-hud" class="floor-hud" aria-label="층 미니맵">
+        <div class="floor-hud__summary">
+          <span class="floor-hud__label">전체</span>
+          <strong id="floor-hud-total">30층</strong>
+        </div>
+        <div class="floor-hud__current" aria-live="polite">
+          <span>현재</span>
+          <strong id="floor-hud-current">0층</strong>
+        </div>
+        <form id="floor-jump-form" class="floor-hud__form">
+          <label for="floor-jump-input">층 이동</label>
+          <div class="floor-hud__jump-row">
+            <input id="floor-jump-input" type="number" min="0" value="0" />
+            <button type="submit">이동</button>
+          </div>
+        </form>
+        <div id="floor-list" class="floor-hud__list" aria-label="층 목록"></div>
+      </aside>
+      <div id="app">
+        <section id="dialogue-box" class="dialogue-box is-hidden" aria-live="polite">
+          <div class="dialogue-box__portrait" aria-hidden="true">
+            <span id="dialogue-initial">?</span>
+          </div>
+          <div class="dialogue-box__content">
+            <strong id="dialogue-speaker">스토리</strong>
+            <p id="dialogue-message">가까이 가면 대사가 표시됩니다.</p>
+          </div>
+        </section>
+      </div>
+      <aside id="story-detail" class="story-detail" aria-live="polite">
+        <div class="story-detail__eyebrow">Details</div>
+        <h2 id="story-detail-title">가까운 오브젝트 없음</h2>
+        <div id="story-detail-media" class="story-detail__media is-empty">
+          <span>대기중</span>
+        </div>
+        <p id="story-detail-text">오브젝트 가까이 이동하면 사진이나 정보가 표시됩니다.</p>
+      </aside>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

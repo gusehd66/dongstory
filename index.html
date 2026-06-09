@@ -26,6 +26,12 @@
       </aside>
       <div id="app">
         <div id="multiplayer-status" class="multiplayer-status" aria-live="polite">멀티플레이 오프라인</div>
+        <div id="nickname-gate" class="nickname-gate">
+          <form id="nickname-form" class="nickname-gate__form">
+            <input id="nickname-input" class="nickname-gate__input" type="text" maxlength="18" autocomplete="nickname" placeholder="닉네임 입력" />
+            <button class="nickname-gate__button" type="submit">입장하기</button>
+          </form>
+        </div>
         <section id="dialogue-box" class="dialogue-box is-hidden" aria-live="polite">
           <div class="dialogue-box__portrait" aria-hidden="true">
             <span id="dialogue-initial">?</span>

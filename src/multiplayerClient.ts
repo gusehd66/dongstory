@@ -209,6 +209,12 @@ export function formatMultiplayerStatus(message: string, playerCount?: number) {
   return `${message} · ${Math.max(0, playerCount)}명 접속`;
 }
 
+export function normalizePlayerName(name: string) {
+  const trimmedName = name.trim();
+
+  return trimmedName ? trimmedName.slice(0, 18) : undefined;
+}
+
 function normalizeRemotePlayer(value: unknown): RemotePlayer | undefined {
   if (!isRecord(value)) {
     return undefined;

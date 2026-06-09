@@ -4,6 +4,7 @@ import {
   createMultiplayerUrl,
   formatMultiplayerStatus,
   getReconnectDelay,
+  normalizePlayerName,
   normalizeMultiplayerNotice,
   normalizeRoomSnapshot,
 } from '../dist-test/multiplayerClient.js';
@@ -89,4 +90,11 @@ test('formats multiplayer status with connected player count', () => {
   assert.equal(formatMultiplayerStatus('멀티플레이 연결 중', 1), '멀티플레이 연결 중 · 1명 접속');
   assert.equal(formatMultiplayerStatus('멀티플레이 연결됨', 12), '멀티플레이 연결됨 · 12명 접속');
   assert.equal(formatMultiplayerStatus('멀티플레이 오프라인'), '멀티플레이 오프라인');
+});
+
+test('normalizes player names before joining multiplayer', () => {
+  assert.equal(normalizePlayerName('  Dodo  '), 'Dodo');
+  assert.equal(normalizePlayerName(''), undefined);
+  assert.equal(normalizePlayerName('                  '), undefined);
+  assert.equal(normalizePlayerName('abcdefghijklmnopqrst'), 'abcdefghijklmnopqr');
 });

@@ -23,6 +23,7 @@ import {
 import {
   createMultiplayerConnection,
   formatMultiplayerStatus,
+  normalizePlayerName,
   type MultiplayerConnection,
   type PlayerAnimation,
   type RemotePlayer,
@@ -62,6 +63,7 @@ const BACKGROUND_FLOOR_INTERVAL = 10;
 const BACKGROUND_FADE_DURATION_MS = 320;
 const MULTIPLAYER_SEND_INTERVAL_MS = 80;
 const REMOTE_PLAYER_LERP = 0.34;
+const PLAYER_NAME_SESSION_KEY = 'dongstory-player-name';
 const BACKGROUND_ASSET_URLS = [
   '/assets/background.png',
   '/assets/background2.png',
@@ -302,7 +304,7 @@ class MainScene extends Phaser.Scene {
     this.cameras.main.setDeadzone(180, 90);
     this.updateActiveFloors(0, this.player.y);
     this.connectFloorHud();
-    this.connectMultiplayer();
+    this.connectNicknameGate();
     this.publishCurrentFloor();
   }
 
@@ -742,11 +744,42 @@ class MainScene extends Phaser.Scene {
     });
   }
 
-  private connectMultiplayer() {
-    const preferredName = window.localStorage.getItem('dongstory-player-name') ?? undefined;
+  private connectNicknameGate() {
+    const form = document.querySelector<HTMLFormElement>('#nickname-form');
+    const input = document.querySelector<HTMLInputElement>('#nickname-input');
+    const gate = document.querySelector<HTMLElement>('#nickname-gate');
+
+    if (!form || !input || !gate) {
+      this.connectMultiplayer();
+      return;
+    }
+
+    input.value = window.sessionStorage.getItem(PLAYER_NAME_SESSION_KEY) ?? '';
+    this.updateMultiplayerStatus();
+
+    form.addEventListener('submit', (event) => {
+      event.preventDefault();
+
+      const playerName = normalizePlayerName(input.value);
+
+      if (playerName) {
+        window.sessionStorage.setItem(PLAYER_NAME_SESSION_KEY, playerName);
+      } else {
+        window.sessionStorage.removeItem(PLAYER_NAME_SESSION_KEY);
+      }
+
+      gate.classList.add('is-hidden');
+      this.connectMultiplayer(playerName);
+    });
+  }
+
+  private connectMultiplayer(playerName?: string) {
+    if (this.multiplayerConnection) {
+      return;
+    }
 
     this.multiplayerConnection = createMultiplayerConnection({
-      name: preferredName,
+      name: playerName,
       onLocalPlayerId: (id) => {
         this.localPlayerId = id;
         this.updateMultiplayerStatus();

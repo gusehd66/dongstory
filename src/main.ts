@@ -13,9 +13,13 @@ import {
   getStoryObjectDetail,
   isNearStoryObject,
   type StoryDialogueDefinition,
+  type StoryDialogueSource,
   type StoryObjectDefinition,
 } from './platformLayout';
-import { loadStoryPhotosFromSupabase } from './storyPhotoSource';
+import {
+  loadStoryDialoguesFromSupabase,
+  loadStoryPhotosFromSupabase,
+} from './storyPhotoSource';
 
 const GAME_WIDTH = 1200;
 const GAME_HEIGHT = 676;
@@ -34,7 +38,7 @@ const STORY_OBJECT_TRIGGER_DISTANCE = 80;
 const STORY_DIALOGUE_X_OFFSET = 0;
 const STORY_DIALOGUE_Y_OFFSET = STORY_OBJECT_Y_OFFSET;
 const STORY_DIALOGUE_TRIGGER_DISTANCE = 70;
-const STORY_DIALOGUE_FLOORS = [1, 21];
+const FALLBACK_STORY_DIALOGUE_FLOORS = [1, 21];
 const STORY_OBJECT_LABEL = '\uC900\uBE44\uC911';
 const FLOOR_DETECTION_TOLERANCE = 12;
 const PLAYER_BODY_HEIGHT = 58;
@@ -84,7 +88,7 @@ const STORY_PHOTO_URLS = [
   '/assets/photo/wedding_20.jpg',
   '/assets/photo/wedding_21.jpg',
 ];
-const STORY_DIALOGUE_LINES = [
+const FALLBACK_STORY_DIALOGUE_LINES = [
   {
     speaker: '\uC288\uAC00',
     message: '\uC548\uB155! \uC774 \uD0D1\uC5D0\uB294 \uC6B0\uB9AC \uC774\uC57C\uAE30\uAC00 \uD55C \uCE35\uC529 \uC313\uC5EC \uC788\uC5B4.',
@@ -100,7 +104,20 @@ const STORY_DIALOGUE_LINES = [
 ];
 
 const SUPABASE_STORY_PHOTOS = await loadSupabaseStoryPhotosSafely();
-const PLATFORM_FLOOR_COUNT = getRequiredFloorCount(DEFAULT_PLATFORM_FLOOR_COUNT, SUPABASE_STORY_PHOTOS);
+const SUPABASE_STORY_DIALOGUES = await loadSupabaseStoryDialoguesSafely();
+const STORY_DIALOGUE_FLOORS = SUPABASE_STORY_DIALOGUES.length > 0
+  ? [...new Set(SUPABASE_STORY_DIALOGUES.map((dialogue) => dialogue.floor))]
+  : FALLBACK_STORY_DIALOGUE_FLOORS;
+const STORY_DIALOGUE_LINES = SUPABASE_STORY_DIALOGUES.length > 0
+  ? []
+  : FALLBACK_STORY_DIALOGUE_LINES;
+const PLATFORM_FLOOR_COUNT = Math.max(
+  getRequiredFloorCount(DEFAULT_PLATFORM_FLOOR_COUNT, SUPABASE_STORY_PHOTOS),
+  getRequiredFloorCount(DEFAULT_PLATFORM_FLOOR_COUNT, SUPABASE_STORY_DIALOGUES.map((dialogue) => ({
+    floor: dialogue.floor,
+    objectId: `dialogue-object-${dialogue.floor - 1}`,
+  }))),
+);
 const WORLD_HEIGHT = Math.max(
   MIN_WORLD_HEIGHT,
   WORLD_TOP_PADDING + FIRST_PLATFORM_FROM_WORLD_BOTTOM + (PLATFORM_FLOOR_COUNT - 1) * PLATFORM_VERTICAL_GAP,
@@ -111,7 +128,7 @@ const GROUND_VISUAL_Y = WORLD_HEIGHT - 5;
 const FIRST_PLATFORM_Y = WORLD_HEIGHT - FIRST_PLATFORM_FROM_WORLD_BOTTOM;
 const PLAYER_START_Y = WORLD_HEIGHT - PLAYER_START_FROM_WORLD_BOTTOM;
 
-type MushroomFrameDefinition = {
+type PlayerFrameDefinition = {
   name: string;
   x: number;
   y: number;
@@ -162,6 +179,7 @@ const STORY_DIALOGUE_DEFINITIONS = createPlatformDialogueDefinitions(PLATFORM_DE
   yOffset: STORY_DIALOGUE_Y_OFFSET,
   floors: STORY_DIALOGUE_FLOORS,
   lines: STORY_DIALOGUE_LINES,
+  storyDialogues: SUPABASE_STORY_DIALOGUES,
 });
 const STORY_DIALOGUE_DEFINITIONS_BY_PLATFORM_INDEX = new Map(
   STORY_DIALOGUE_DEFINITIONS.map((definition) => [
@@ -170,13 +188,18 @@ const STORY_DIALOGUE_DEFINITIONS_BY_PLATFORM_INDEX = new Map(
   ]),
 );
 
-const MUSHROOM_FRAMES: MushroomFrameDefinition[] = [
-  { name: 'idle-0', x: 0, y: 0, width: 126, height: 120 },
-  { name: 'walk-0', x: 0, y: 145, width: 126, height: 110 },
-  { name: 'walk-1', x: 135, y: 145, width: 130, height: 110 },
-  { name: 'walk-2', x: 272, y: 145, width: 126, height: 110 },
-  { name: 'jump-0', x: 418, y: 125, width: 128, height: 155 },
-  { name: 'jump-1', x: 552, y: 125, width: 128, height: 155 },
+const PLAYER_TEXTURE_KEY = 'player';
+const PLAYER_FRAMES: PlayerFrameDefinition[] = [
+  { name: 'idle-0', x: 144, y: 207, width: 131, height: 172 },
+  { name: 'walk-0', x: 123, y: 387, width: 129, height: 172 },
+  { name: 'walk-1', x: 278, y: 387, width: 130, height: 173 },
+  { name: 'walk-2', x: 444, y: 387, width: 129, height: 172 },
+  { name: 'jump-0', x: 272, y: 561, width: 131, height: 168 },
+  { name: 'jump-1', x: 272, y: 561, width: 131, height: 168 },
+  { name: 'crouch-0', x: 621, y: 627, width: 163, height: 120 },
+  { name: 'crouch-1', x: 803, y: 631, width: 163, height: 116 },
+  { name: 'crouch-2', x: 981, y: 627, width: 163, height: 120 },
+  { name: 'crouch-3', x: 1162, y: 631, width: 163, height: 116 },
 ];
 
 class MainScene extends Phaser.Scene {
@@ -207,7 +230,7 @@ class MainScene extends Phaser.Scene {
     });
     this.load.image('ground', '/assets/ground.png');
     this.load.image('stool', '/assets/stool1.png');
-    this.load.image('mushroom-player', '/assets/mushroom-player.png');
+    this.load.image(PLAYER_TEXTURE_KEY, '/assets/player-transparent.png');
     this.createRectTexture('player-body', 46, 58, 0x2f80ed);
     this.createRectTexture('ground-collider', GROUND_VISUAL_WIDTH, GROUND_COLLIDER_HEIGHT, 0x00ff00);
     this.createRectTexture('platform-small-collider', 150, PLATFORM_COLLIDER_HEIGHT, 0x00ff00);
@@ -232,7 +255,7 @@ class MainScene extends Phaser.Scene {
     this.platforms = this.physics.add.staticGroup();
     this.createGround(this.platforms);
 
-    this.registerMushroomFrames();
+    this.registerPlayerFrames();
     this.createAnimations();
 
     this.player = this.physics.add.sprite(PLAYER_START_X, PLAYER_START_Y, 'player-body');
@@ -241,9 +264,9 @@ class MainScene extends Phaser.Scene {
     this.player.setDragX(1800);
     this.player.setMaxVelocity(340, 760);
 
-    this.playerVisual = this.add.sprite(this.player.x, this.player.y, 'mushroom-player', 'idle-0');
+    this.playerVisual = this.add.sprite(this.player.x, this.player.y, PLAYER_TEXTURE_KEY, 'idle-0');
     this.playerVisual.setOrigin(0.5, 1);
-    this.playerVisual.setScale(0.62);
+    this.playerVisual.setScale(0.42);
     this.playerVisual.play('player-idle');
 
     this.physics.add.collider(this.player, this.platforms);
@@ -268,13 +291,16 @@ class MainScene extends Phaser.Scene {
     const isGrounded = body.blocked.down || body.touching.down;
     const movingLeft = this.cursors.left?.isDown;
     const movingRight = this.cursors.right?.isDown;
+    const isCrouching = isGrounded && Boolean(this.cursors.down?.isDown);
     const wantsJump =
       Phaser.Input.Keyboard.JustDown(this.jumpKey) ||
       Phaser.Input.Keyboard.JustDown(this.cursors.up);
 
     this.updateActiveFloors(body.velocity.y, body.center.y);
 
-    if (movingLeft) {
+    if (isCrouching) {
+      this.player.setAccelerationX(0);
+    } else if (movingLeft) {
       this.player.setAccelerationX(-runAcceleration);
       this.playerVisual.setFlipX(false);
     } else if (movingRight) {
@@ -292,7 +318,7 @@ class MainScene extends Phaser.Scene {
       this.player.setVelocityY(jumpCutVelocity);
     }
 
-    this.updatePlayerAnimation(isGrounded, movingLeft || movingRight);
+    this.updatePlayerAnimation(isGrounded, movingLeft || movingRight, isCrouching);
     this.syncPlayerVisual();
     this.updateBackgroundByHeight(body.bottom);
     this.updateCurrentFloor(isGrounded, body.bottom);
@@ -770,7 +796,7 @@ class MainScene extends Phaser.Scene {
   private createAnimations() {
     this.anims.create({
       key: 'player-idle',
-      frames: [{ key: 'mushroom-player', frame: 'idle-0' }],
+      frames: [{ key: PLAYER_TEXTURE_KEY, frame: 'idle-0' }],
       frameRate: 1,
       repeat: -1,
     });
@@ -778,10 +804,10 @@ class MainScene extends Phaser.Scene {
     this.anims.create({
       key: 'player-run',
       frames: [
-        { key: 'mushroom-player', frame: 'walk-0' },
-        { key: 'mushroom-player', frame: 'walk-1' },
-        { key: 'mushroom-player', frame: 'walk-2' },
-        { key: 'mushroom-player', frame: 'walk-1' },
+        { key: PLAYER_TEXTURE_KEY, frame: 'walk-0' },
+        { key: PLAYER_TEXTURE_KEY, frame: 'walk-1' },
+        { key: PLAYER_TEXTURE_KEY, frame: 'walk-2' },
+        { key: PLAYER_TEXTURE_KEY, frame: 'walk-1' },
       ],
       frameRate: 9,
       repeat: -1,
@@ -790,17 +816,34 @@ class MainScene extends Phaser.Scene {
     this.anims.create({
       key: 'player-jump',
       frames: [
-        { key: 'mushroom-player', frame: 'jump-0' },
-        { key: 'mushroom-player', frame: 'jump-1' },
+        { key: PLAYER_TEXTURE_KEY, frame: 'jump-0' },
+        { key: PLAYER_TEXTURE_KEY, frame: 'jump-1' },
       ],
       frameRate: 5,
       repeat: -1,
     });
+
+    this.anims.create({
+      key: 'player-crouch',
+      frames: [
+        { key: PLAYER_TEXTURE_KEY, frame: 'crouch-0' },
+        { key: PLAYER_TEXTURE_KEY, frame: 'crouch-1' },
+        { key: PLAYER_TEXTURE_KEY, frame: 'crouch-2' },
+        { key: PLAYER_TEXTURE_KEY, frame: 'crouch-3' },
+      ],
+      frameRate: 6,
+      repeat: -1,
+    });
   }
 
-  private updatePlayerAnimation(isGrounded: boolean, isMoving: boolean) {
+  private updatePlayerAnimation(isGrounded: boolean, isMoving: boolean, isCrouching: boolean) {
     if (!isGrounded) {
       this.playerVisual.play('player-jump', true);
+      return;
+    }
+
+    if (isCrouching) {
+      this.playerVisual.play('player-crouch', true);
       return;
     }
 
@@ -832,10 +875,10 @@ class MainScene extends Phaser.Scene {
     }
   }
 
-  private registerMushroomFrames() {
-    const texture = this.textures.get('mushroom-player');
+  private registerPlayerFrames() {
+    const texture = this.textures.get(PLAYER_TEXTURE_KEY);
 
-    MUSHROOM_FRAMES.forEach(({ name, x, y, width, height }) => {
+    PLAYER_FRAMES.forEach(({ name, x, y, width, height }) => {
       if (!texture.has(name)) {
         texture.add(name, 0, x, y, width, height);
       }
@@ -877,6 +920,15 @@ new Phaser.Game(config);
 async function loadSupabaseStoryPhotosSafely() {
   try {
     return await loadStoryPhotosFromSupabase();
+  } catch (error) {
+    console.warn(error);
+    return [];
+  }
+}
+
+async function loadSupabaseStoryDialoguesSafely(): Promise<StoryDialogueSource[]> {
+  try {
+    return await loadStoryDialoguesFromSupabase();
   } catch (error) {
     console.warn(error);
     return [];

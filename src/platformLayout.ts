@@ -40,6 +40,10 @@ export type StoryDialogueLine = {
   message: string;
 };
 
+export type StoryDialogueSource = StoryDialogueLine & {
+  floor: number;
+};
+
 export type StoryDialogueDefinition = StoryDialogueLine & {
   id: string;
   x: number;
@@ -65,8 +69,9 @@ export type PlatformObjectOptions = {
 export type PlatformDialogueOptions = {
   xOffset: number;
   yOffset: number;
-  lines: StoryDialogueLine[];
+  lines?: StoryDialogueLine[];
   floors?: number[];
+  storyDialogues?: StoryDialogueSource[];
 };
 
 export type Point = {
@@ -187,8 +192,31 @@ export function createPlatformObjectDefinitions(
 
 export function createPlatformDialogueDefinitions(
   platforms: PlatformDefinition[],
-  { xOffset, yOffset, lines, floors }: PlatformDialogueOptions,
+  { xOffset, yOffset, lines = [], floors, storyDialogues = [] }: PlatformDialogueOptions,
 ): StoryDialogueDefinition[] {
+  if (storyDialogues.length > 0) {
+    return [...storyDialogues]
+      .sort((first, second) => first.floor - second.floor)
+      .reduce<StoryDialogueDefinition[]>((dialogues, storyDialogue) => {
+        const platformIndex = storyDialogue.floor - 1;
+        const platform = platforms[platformIndex];
+
+        if (!platform) {
+          return dialogues;
+        }
+
+        dialogues.push({
+          id: `dialogue-object-${platformIndex}`,
+          x: platform.x + xOffset,
+          y: platform.y - yOffset,
+          speaker: storyDialogue.speaker,
+          message: storyDialogue.message,
+        });
+
+        return dialogues;
+      }, []);
+  }
+
   if (lines.length === 0) {
     return [];
   }

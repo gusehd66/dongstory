@@ -153,6 +153,48 @@ test('creates dialogue objects only on selected floors', () => {
   assert.deepEqual(dialogueObjects.map((dialogue) => dialogue.speaker), ['Sugar', 'Dodo']);
 });
 
+test('creates dialogue objects from floor-specific dialogue data', () => {
+  const platforms = createZigzagPlatformDefinitions({
+    floorCount: 22,
+    leftX: 360,
+    rightX: 600,
+    bottomY: 7000,
+    verticalGap: 150,
+  });
+
+  const dialogueObjects = createPlatformDialogueDefinitions(platforms, {
+    xOffset: 0,
+    yOffset: 44,
+    storyDialogues: [
+      { floor: 21, speaker: 'Dodo', message: 'Floor 21 from DB.' },
+      { floor: 1, speaker: 'Sugar', message: 'Floor 1 from DB.' },
+    ],
+  });
+
+  assert.deepEqual(dialogueObjects.map((dialogue) => ({
+    id: dialogue.id,
+    x: dialogue.x,
+    y: dialogue.y,
+    speaker: dialogue.speaker,
+    message: dialogue.message,
+  })), [
+    {
+      id: 'dialogue-object-0',
+      x: 360,
+      y: 6956,
+      speaker: 'Sugar',
+      message: 'Floor 1 from DB.',
+    },
+    {
+      id: 'dialogue-object-20',
+      x: 360,
+      y: 3956,
+      speaker: 'Dodo',
+      message: 'Floor 21 from DB.',
+    },
+  ]);
+});
+
 test('can place selected dialogue objects in the story object slot', () => {
   const platforms = [
     { x: 360, y: 7000, texture: 'platform' },

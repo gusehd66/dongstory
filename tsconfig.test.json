@@ -8,5 +8,5 @@
     "outDir": "dist-test",
     "rootDir": "src"
   },
-  "include": ["src/platformLayout.ts"]
+  "include": ["src/platformLayout.ts", "src/multiplayerClient.ts"]
 }

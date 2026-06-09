@@ -5,15 +5,19 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "test": "tsc -p tsconfig.test.json && node --test tests/platformLayout.test.mjs",
+    "dev:server": "node server/multiplayer-server.mjs",
+    "dev:multi": "node server/dev-multi.mjs",
+    "test": "tsc -p tsconfig.test.json && node --test tests/platformLayout.test.mjs tests/multiplayerRoom.test.mjs tests/multiplayerClient.test.mjs tests/staticFileResponder.test.mjs",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "start": "node server/multiplayer-server.mjs"
   },
   "devDependencies": {
     "typescript": "~6.0.2",
     "vite": "^8.0.12"
   },
   "dependencies": {
-    "phaser": "^4.1.0"
+    "phaser": "^4.1.0",
+    "ws": "^8.21.0"
   }
 }

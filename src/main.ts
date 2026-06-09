@@ -20,6 +20,13 @@ import {
   loadStoryDialoguesFromSupabase,
   loadStoryPhotosFromSupabase,
 } from './storyPhotoSource';
+import {
+  createMultiplayerConnection,
+  type MultiplayerConnection,
+  type PlayerAnimation,
+  type RemotePlayer,
+  type RoomSnapshot,
+} from './multiplayerClient';
 
 const GAME_WIDTH = 1200;
 const GAME_HEIGHT = 676;
@@ -52,6 +59,8 @@ const ACTIVE_PLATFORM_BELOW_BUFFER_Y = 1600;
 const ACTIVE_PLATFORM_FALLING_LOOKAHEAD_SECONDS = 0.75;
 const BACKGROUND_FLOOR_INTERVAL = 10;
 const BACKGROUND_FADE_DURATION_MS = 320;
+const MULTIPLAYER_SEND_INTERVAL_MS = 80;
+const REMOTE_PLAYER_LERP = 0.34;
 const BACKGROUND_ASSET_URLS = [
   '/assets/background.png',
   '/assets/background2.png',
@@ -152,6 +161,12 @@ type PlatformView = {
   collider: Phaser.Physics.Arcade.Sprite;
 };
 
+type RemotePlayerView = {
+  sprite: Phaser.GameObjects.Sprite;
+  label: Phaser.GameObjects.Text;
+  target: RemotePlayer;
+};
+
 const PLATFORM_DEFINITIONS = createZigzagPlatformDefinitions({
   floorCount: PLATFORM_FLOOR_COUNT,
   leftX: 360,
@@ -214,7 +229,12 @@ class MainScene extends Phaser.Scene {
   private activePlatformViews = new Map<number, PlatformView>();
   private activeStoryObjectViews = new Map<number, StoryObjectView>();
   private activeStoryDialogueViews = new Map<number, StoryDialogueView>();
+  private remotePlayerViews = new Map<string, RemotePlayerView>();
   private loadingStoryPhotoTextureKeys = new Set<string>();
+  private multiplayerConnection?: MultiplayerConnection;
+  private localPlayerId?: string;
+  private lastMultiplayerSentAt = 0;
+  private playerAnimationState: PlayerAnimation = 'idle';
   private currentFloor = 0;
   private activeBackgroundIndex = 0;
   private activeStoryObjectId?: string;
@@ -280,6 +300,7 @@ class MainScene extends Phaser.Scene {
     this.cameras.main.setDeadzone(180, 90);
     this.updateActiveFloors(0, this.player.y);
     this.connectFloorHud();
+    this.connectMultiplayer();
     this.publishCurrentFloor();
   }
 
@@ -324,6 +345,8 @@ class MainScene extends Phaser.Scene {
     this.updateCurrentFloor(isGrounded, body.bottom);
     this.updateStoryObjectPopups(body.center.x, body.center.y);
     this.updateStoryDialogue(body.center.x, body.center.y);
+    this.updateRemotePlayerViews();
+    this.sendMultiplayerUpdate(this.time.now, body);
 
     if (Phaser.Input.Keyboard.JustDown(this.debugKey)) {
       this.setPhysicsDebug(!this.debugEnabled);
@@ -717,6 +740,117 @@ class MainScene extends Phaser.Scene {
     });
   }
 
+  private connectMultiplayer() {
+    const preferredName = window.localStorage.getItem('dongstory-player-name') ?? undefined;
+
+    this.multiplayerConnection = createMultiplayerConnection({
+      name: preferredName,
+      onLocalPlayerId: (id) => {
+        this.localPlayerId = id;
+        this.updateMultiplayerStatus();
+      },
+      onSnapshot: (snapshot) => this.applyMultiplayerSnapshot(snapshot),
+      onNotice: (notice) => {
+        this.updateMultiplayerStatus(notice.message, true);
+      },
+    });
+    this.updateMultiplayerStatus('멀티플레이 연결 중');
+  }
+
+  private applyMultiplayerSnapshot(snapshot: RoomSnapshot) {
+    const remoteIds = new Set<string>();
+
+    snapshot.players.forEach((remotePlayer) => {
+      if (remotePlayer.id === this.localPlayerId) {
+        return;
+      }
+
+      remoteIds.add(remotePlayer.id);
+      this.upsertRemotePlayer(remotePlayer);
+    });
+
+    this.remotePlayerViews.forEach((view, id) => {
+      if (remoteIds.has(id)) {
+        return;
+      }
+
+      view.sprite.destroy();
+      view.label.destroy();
+      this.remotePlayerViews.delete(id);
+    });
+  }
+
+  private upsertRemotePlayer(remotePlayer: RemotePlayer) {
+    const existingView = this.remotePlayerViews.get(remotePlayer.id);
+
+    if (existingView) {
+      existingView.target = remotePlayer;
+      return;
+    }
+
+    const sprite = this.add
+      .sprite(remotePlayer.x, remotePlayer.y, PLAYER_TEXTURE_KEY, 'idle-0')
+      .setOrigin(0.5, 1)
+      .setScale(0.42)
+      .setAlpha(0.72)
+      .setDepth(20);
+    const label = this.add
+      .text(remotePlayer.x, remotePlayer.y - 84, remotePlayer.name, {
+        color: '#fff7cc',
+        fontFamily: 'system-ui, Segoe UI, sans-serif',
+        fontSize: '13px',
+        fontStyle: '900',
+        stroke: '#20303a',
+        strokeThickness: 4,
+      })
+      .setOrigin(0.5)
+      .setDepth(21);
+
+    this.remotePlayerViews.set(remotePlayer.id, {
+      sprite,
+      label,
+      target: remotePlayer,
+    });
+  }
+
+  private updateRemotePlayerViews() {
+    this.remotePlayerViews.forEach(({ sprite, label, target }) => {
+      sprite.x = Phaser.Math.Linear(sprite.x, target.x, REMOTE_PLAYER_LERP);
+      sprite.y = Phaser.Math.Linear(sprite.y, target.y, REMOTE_PLAYER_LERP);
+      sprite.setFlipX(target.facing === 'right');
+      sprite.play(this.getPlayerAnimationKey(target.animation), true);
+      label.setPosition(sprite.x, sprite.y - 84);
+    });
+  }
+
+  private sendMultiplayerUpdate(now: number, body: Phaser.Physics.Arcade.Body) {
+    if (!this.multiplayerConnection || now - this.lastMultiplayerSentAt < MULTIPLAYER_SEND_INTERVAL_MS) {
+      return;
+    }
+
+    this.lastMultiplayerSentAt = now;
+    this.multiplayerConnection.sendPlayerUpdate({
+      x: body.center.x,
+      y: body.bottom,
+      velocityX: body.velocity.x,
+      velocityY: body.velocity.y,
+      floor: this.currentFloor,
+      facing: this.playerVisual.flipX ? 'right' : 'left',
+      animation: this.playerAnimationState,
+    });
+  }
+
+  private updateMultiplayerStatus(message?: string, isError = false) {
+    const status = document.querySelector<HTMLElement>('#multiplayer-status');
+
+    if (!status) {
+      return;
+    }
+
+    status.textContent = message ?? (this.localPlayerId ? '멀티플레이 연결됨' : '멀티플레이 오프라인');
+    status.classList.toggle('is-error', isError);
+  }
+
   private teleportToFloor(floor: number) {
     const normalizedFloor = Phaser.Math.Clamp(Math.round(floor), 0, PLATFORM_FLOOR_COUNT);
     const target = getFloorTargetPosition(normalizedFloor, PLATFORM_DEFINITIONS, {
@@ -838,21 +972,29 @@ class MainScene extends Phaser.Scene {
 
   private updatePlayerAnimation(isGrounded: boolean, isMoving: boolean, isCrouching: boolean) {
     if (!isGrounded) {
+      this.playerAnimationState = 'jump';
       this.playerVisual.play('player-jump', true);
       return;
     }
 
     if (isCrouching) {
+      this.playerAnimationState = 'crouch';
       this.playerVisual.play('player-crouch', true);
       return;
     }
 
     if (isMoving) {
+      this.playerAnimationState = 'run';
       this.playerVisual.play('player-run', true);
       return;
     }
 
+    this.playerAnimationState = 'idle';
     this.playerVisual.play('player-idle', true);
+  }
+
+  private getPlayerAnimationKey(animation: PlayerAnimation) {
+    return `player-${animation}`;
   }
 
   private syncPlayerVisual() {

@@ -22,6 +22,7 @@ import {
 } from './storyPhotoSource';
 import {
   createMultiplayerConnection,
+  formatMultiplayerStatus,
   type MultiplayerConnection,
   type PlayerAnimation,
   type RemotePlayer,
@@ -233,6 +234,7 @@ class MainScene extends Phaser.Scene {
   private loadingStoryPhotoTextureKeys = new Set<string>();
   private multiplayerConnection?: MultiplayerConnection;
   private localPlayerId?: string;
+  private multiplayerPlayerCount?: number;
   private lastMultiplayerSentAt = 0;
   private playerAnimationState: PlayerAnimation = 'idle';
   private currentFloor = 0;
@@ -749,9 +751,13 @@ class MainScene extends Phaser.Scene {
         this.localPlayerId = id;
         this.updateMultiplayerStatus();
       },
-      onSnapshot: (snapshot) => this.applyMultiplayerSnapshot(snapshot),
+      onSnapshot: (snapshot) => {
+        this.multiplayerPlayerCount = snapshot.players.length;
+        this.applyMultiplayerSnapshot(snapshot);
+        this.updateMultiplayerStatus();
+      },
       onNotice: (notice) => {
-        this.updateMultiplayerStatus(notice.message, true);
+        this.updateMultiplayerStatus(notice.message, notice.type === 'room-full' || notice.type === 'connection-lost');
       },
     });
     this.updateMultiplayerStatus('멀티플레이 연결 중');
@@ -847,7 +853,10 @@ class MainScene extends Phaser.Scene {
       return;
     }
 
-    status.textContent = message ?? (this.localPlayerId ? '멀티플레이 연결됨' : '멀티플레이 오프라인');
+    status.textContent = formatMultiplayerStatus(
+      message ?? (this.localPlayerId ? '멀티플레이 연결됨' : '멀티플레이 오프라인'),
+      this.multiplayerPlayerCount,
+    );
     status.classList.toggle('is-error', isError);
   }
 

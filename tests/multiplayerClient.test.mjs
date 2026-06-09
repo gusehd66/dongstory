@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   createMultiplayerUrl,
+  formatMultiplayerStatus,
   getReconnectDelay,
   normalizeMultiplayerNotice,
   normalizeRoomSnapshot,
@@ -82,4 +83,10 @@ test('caps reconnect delay after repeated disconnects', () => {
   assert.equal(getReconnectDelay(1), 1000);
   assert.equal(getReconnectDelay(2), 2000);
   assert.equal(getReconnectDelay(10), 5000);
+});
+
+test('formats multiplayer status with connected player count', () => {
+  assert.equal(formatMultiplayerStatus('멀티플레이 연결 중', 1), '멀티플레이 연결 중 · 1명 접속');
+  assert.equal(formatMultiplayerStatus('멀티플레이 연결됨', 12), '멀티플레이 연결됨 · 12명 접속');
+  assert.equal(formatMultiplayerStatus('멀티플레이 오프라인'), '멀티플레이 오프라인');
 });

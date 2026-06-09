@@ -201,6 +201,14 @@ export function normalizeMultiplayerNotice(value: unknown): MultiplayerNotice | 
   };
 }
 
+export function formatMultiplayerStatus(message: string, playerCount?: number) {
+  if (playerCount === undefined) {
+    return message;
+  }
+
+  return `${message} · ${Math.max(0, playerCount)}명 접속`;
+}
+
 function normalizeRemotePlayer(value: unknown): RemotePlayer | undefined {
   if (!isRecord(value)) {
     return undefined;

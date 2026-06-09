@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   createMultiplayerUrl,
+  getReconnectDelay,
   normalizeMultiplayerNotice,
   normalizeRoomSnapshot,
 } from '../dist-test/multiplayerClient.js';
@@ -74,4 +75,11 @@ test('normalizes room full notices', () => {
     type: 'room:full',
     message: 123,
   }), undefined);
+});
+
+test('caps reconnect delay after repeated disconnects', () => {
+  assert.equal(getReconnectDelay(0), 500);
+  assert.equal(getReconnectDelay(1), 1000);
+  assert.equal(getReconnectDelay(2), 2000);
+  assert.equal(getReconnectDelay(10), 5000);
 });

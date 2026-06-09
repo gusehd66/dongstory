@@ -21,7 +21,7 @@ export type RoomSnapshot = {
 };
 
 export type MultiplayerNotice = {
-  type: 'room-full';
+  type: 'room-full' | 'connection-lost' | 'reconnecting' | 'connected';
   message: string;
 };
 
@@ -80,49 +80,114 @@ export function createMultiplayerConnection({
     return undefined;
   }
 
-  const socket = new WebSocket(url);
+  let socket: WebSocket | undefined;
   let localPlayerId: string | undefined;
+  let reconnectAttempt = 0;
+  let reconnectTimer: number | undefined;
+  let wasDisconnected = false;
+  let isClosedByClient = false;
+  let lastUpdate: LocalPlayerUpdate | undefined;
 
-  socket.addEventListener('open', () => {
-    socket.send(JSON.stringify({ type: 'player:join', name }));
-  });
+  connect();
 
-  socket.addEventListener('message', (event) => {
-    const message = parseJson(event.data);
+  function connect() {
+    socket = new WebSocket(url);
 
-    if (isWelcomeMessage(message)) {
-      localPlayerId = message.id;
-      onLocalPlayerId?.(message.id);
+    socket.addEventListener('open', () => {
+      socket?.send(JSON.stringify({ type: 'player:join', name }));
+    });
+
+    socket.addEventListener('message', (event) => {
+      const message = parseJson(event.data);
+
+      if (isWelcomeMessage(message)) {
+        localPlayerId = message.id;
+        reconnectAttempt = 0;
+        onLocalPlayerId?.(message.id);
+        onNotice?.({
+          type: 'connected',
+          message: wasDisconnected ? '멀티플레이 다시 연결됨' : '멀티플레이 연결됨',
+        });
+        wasDisconnected = false;
+
+        if (lastUpdate) {
+          socket?.send(JSON.stringify({ type: 'player:update', ...lastUpdate }));
+        }
+
+        return;
+      }
+
+      if (isRoomSnapshotMessage(message)) {
+        onSnapshot(normalizeRoomSnapshot(message));
+        return;
+      }
+
+      const notice = normalizeMultiplayerNotice(message);
+
+      if (notice) {
+        onNotice?.(notice);
+      }
+    });
+
+    socket.addEventListener('close', () => {
+      if (isClosedByClient) {
+        return;
+      }
+
+      wasDisconnected = true;
+      localPlayerId = undefined;
+      onNotice?.({
+        type: 'connection-lost',
+        message: '연결이 끊겼습니다. 다시 연결 중...',
+      });
+      scheduleReconnect();
+    });
+  }
+
+  function scheduleReconnect() {
+    if (reconnectTimer !== undefined) {
       return;
     }
 
-    if (isRoomSnapshotMessage(message)) {
-      onSnapshot(normalizeRoomSnapshot(message));
-      return;
-    }
-
-    const notice = normalizeMultiplayerNotice(message);
-
-    if (notice) {
-      onNotice?.(notice);
-    }
-  });
+    const delay = getReconnectDelay(reconnectAttempt);
+    reconnectAttempt += 1;
+    onNotice?.({
+      type: 'reconnecting',
+      message: '멀티플레이 재연결 중',
+    });
+    reconnectTimer = window.setTimeout(() => {
+      reconnectTimer = undefined;
+      connect();
+    }, delay);
+  }
 
   return {
     get localPlayerId() {
       return localPlayerId;
     },
     sendPlayerUpdate(update) {
-      if (socket.readyState !== WebSocket.OPEN) {
+      lastUpdate = update;
+
+      if (socket?.readyState !== WebSocket.OPEN) {
         return;
       }
 
       socket.send(JSON.stringify({ type: 'player:update', ...update }));
     },
     disconnect() {
-      socket.close();
+      isClosedByClient = true;
+
+      if (reconnectTimer !== undefined) {
+        window.clearTimeout(reconnectTimer);
+      }
+
+      socket?.close();
     },
   };
+}
+
+export function getReconnectDelay(attempt: number) {
+  return Math.min(500 * 2 ** Math.max(0, attempt), 5000);
 }
 
 export function normalizeMultiplayerNotice(value: unknown): MultiplayerNotice | undefined {

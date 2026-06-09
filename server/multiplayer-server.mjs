@@ -3,15 +3,22 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { WebSocket, WebSocketServer } from 'ws';
 import { createMultiplayerRoom } from './multiplayerRoom.mjs';
+import { createSnapshotBroadcaster } from './snapshotBroadcaster.mjs';
 import { createStaticFileResponder } from './staticFileResponder.mjs';
 
 const PORT = Number.parseInt(process.env.PORT ?? process.env.MULTIPLAYER_PORT ?? '3010', 10);
 const HOST = process.env.HOST ?? process.env.MULTIPLAYER_HOST ?? (process.env.PORT ? '0.0.0.0' : '127.0.0.1');
+const SNAPSHOT_INTERVAL_MS = 100;
+const HEARTBEAT_INTERVAL_MS = 30000;
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const distDir = join(__dirname, '..', 'dist');
 const room = createMultiplayerRoom();
 const socketsByPlayerId = new Map();
 const staticFiles = createStaticFileResponder(distDir);
+const snapshotBroadcaster = createSnapshotBroadcaster({
+  intervalMs: SNAPSHOT_INTERVAL_MS,
+  sendSnapshot: broadcastSnapshot,
+});
 
 const httpServer = createServer(async (request, response) => {
   const staticResponse = await staticFiles.respond(request.url);
@@ -27,6 +34,11 @@ const server = new WebSocketServer({ server: httpServer });
 
 server.on('connection', (socket) => {
   let playerId;
+  socket.isAlive = true;
+
+  socket.on('pong', () => {
+    socket.isAlive = true;
+  });
 
   socket.on('message', (data) => {
     const message = parseJson(data);
@@ -48,13 +60,13 @@ server.on('connection', (socket) => {
       playerId = player.id;
       socketsByPlayerId.set(player.id, socket);
       socket.send(JSON.stringify({ type: 'player:welcome', id: player.id, player }));
-      broadcastSnapshot();
+      snapshotBroadcaster.broadcastNow();
       return;
     }
 
     if (message.type === 'player:update' && playerId) {
       room.update(playerId, message);
-      broadcastSnapshot();
+      snapshotBroadcaster.requestBroadcast();
     }
   });
 
@@ -65,7 +77,7 @@ server.on('connection', (socket) => {
 
     room.leave(playerId);
     socketsByPlayerId.delete(playerId);
-    broadcastSnapshot();
+    snapshotBroadcaster.broadcastNow();
   });
 });
 
@@ -74,6 +86,22 @@ server.on('listening', () => {
 });
 
 httpServer.listen(PORT, HOST);
+
+const heartbeat = setInterval(() => {
+  server.clients.forEach((socket) => {
+    if (socket.isAlive === false) {
+      socket.terminate();
+      return;
+    }
+
+    socket.isAlive = false;
+    socket.ping();
+  });
+}, HEARTBEAT_INTERVAL_MS);
+
+server.on('close', () => {
+  clearInterval(heartbeat);
+});
 
 function broadcastSnapshot() {
   const message = JSON.stringify({ type: 'room:snapshot', ...room.getSnapshot() });

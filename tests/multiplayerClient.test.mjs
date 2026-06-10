@@ -4,7 +4,9 @@ import {
   createMultiplayerUrl,
   formatMultiplayerStatus,
   getAdminJoinCode,
+  getInterpolatedRemotePlayer,
   getReconnectDelay,
+  getChatBubbleText,
   normalizeChatMessage,
   normalizeOutgoingChatText,
   normalizePlayerName,
@@ -104,6 +106,39 @@ test('selects a player texture key by role', () => {
   assert.equal(getPlayerTextureKey('normal'), 'player-normal');
 });
 
+test('interpolates remote player samples at a delayed render time', () => {
+  const first = createRemotePlayer({ x: 0, y: 100, velocityX: 100, velocityY: -20, animation: 'run' });
+  const second = createRemotePlayer({ x: 100, y: 80, velocityX: 100, velocityY: -20, animation: 'jump' });
+
+  const player = getInterpolatedRemotePlayer([
+    { receivedAt: 1000, player: first },
+    { receivedAt: 1100, player: second },
+  ], 1170, 120);
+
+  assert.equal(player?.x, 50);
+  assert.equal(player?.y, 90);
+  assert.equal(player?.velocityX, 100);
+  assert.equal(player?.velocityY, -20);
+  assert.equal(player?.animation, 'jump');
+});
+
+test('predicts briefly from the newest remote player sample', () => {
+  const newest = createRemotePlayer({ x: 100, y: 50, velocityX: 80, velocityY: -40 });
+
+  const player = getInterpolatedRemotePlayer([
+    { receivedAt: 1000, player: newest },
+  ], 1240, 120, 100);
+
+  assert.equal(player?.x, 108);
+  assert.equal(player?.y, 46);
+});
+
+test('prepares compact chat text for speech bubbles', () => {
+  assert.equal(getChatBubbleText('  hello dongstory  '), 'hello dongstory');
+  assert.equal(getChatBubbleText(''), undefined);
+  assert.equal(getChatBubbleText('a'.repeat(90), 20), `${'a'.repeat(17)}...`);
+});
+
 test('normalizes room full notices', () => {
   assert.deepEqual(normalizeMultiplayerNotice({
     type: 'room:full',
@@ -177,3 +212,19 @@ test('releases chat focus only when clicking outside the chat panel', () => {
   assert.equal(shouldReleaseChatFocus('chat-input', true), false);
   assert.equal(shouldReleaseChatFocus('nickname-input', false), false);
 });
+
+function createRemotePlayer(overrides = {}) {
+  return {
+    id: 'player-1',
+    name: 'Dodo',
+    role: 'normal',
+    x: 0,
+    y: 0,
+    velocityX: 0,
+    velocityY: 0,
+    floor: 1,
+    facing: 'right',
+    animation: 'idle',
+    ...overrides,
+  };
+}

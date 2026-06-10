@@ -18,6 +18,11 @@ export type RemotePlayer = LocalPlayerUpdate & {
   role: PlayerRole;
 };
 
+export type RemotePlayerInterpolationSample = {
+  receivedAt: number;
+  player: RemotePlayer;
+};
+
 export type RoomSnapshot = {
   players: RemotePlayer[];
 };
@@ -260,10 +265,74 @@ export function getPlayerTextureKey(role: PlayerRole) {
   return role === 'admin' ? 'player-admin' : 'player-normal';
 }
 
+export function getInterpolatedRemotePlayer(
+  samples: RemotePlayerInterpolationSample[],
+  now: number,
+  interpolationDelayMs = 120,
+  maxPredictionMs = 120,
+): RemotePlayer | undefined {
+  if (samples.length === 0) {
+    return undefined;
+  }
+
+  const sortedSamples = [...samples].sort((first, second) => first.receivedAt - second.receivedAt);
+  const renderTime = now - Math.max(0, interpolationDelayMs);
+  const oldestSample = sortedSamples[0];
+  const newestSample = sortedSamples[sortedSamples.length - 1];
+
+  if (renderTime <= oldestSample.receivedAt) {
+    return { ...oldestSample.player };
+  }
+
+  for (let index = 1; index < sortedSamples.length; index += 1) {
+    const previousSample = sortedSamples[index - 1];
+    const nextSample = sortedSamples[index];
+
+    if (renderTime <= nextSample.receivedAt) {
+      const sampleDuration = Math.max(1, nextSample.receivedAt - previousSample.receivedAt);
+      const progress = Math.max(0, Math.min(1, (renderTime - previousSample.receivedAt) / sampleDuration));
+
+      return {
+        ...nextSample.player,
+        x: lerp(previousSample.player.x, nextSample.player.x, progress),
+        y: lerp(previousSample.player.y, nextSample.player.y, progress),
+        velocityX: lerp(previousSample.player.velocityX, nextSample.player.velocityX, progress),
+        velocityY: lerp(previousSample.player.velocityY, nextSample.player.velocityY, progress),
+      };
+    }
+  }
+
+  const predictionMs = Math.min(
+    Math.max(0, renderTime - newestSample.receivedAt),
+    Math.max(0, maxPredictionMs),
+  );
+  const predictionSeconds = predictionMs / 1000;
+
+  return {
+    ...newestSample.player,
+    x: newestSample.player.x + newestSample.player.velocityX * predictionSeconds,
+    y: newestSample.player.y + newestSample.player.velocityY * predictionSeconds,
+  };
+}
+
 export function normalizeOutgoingChatText(text: string) {
   const trimmedText = text.trim();
 
   return trimmedText ? trimmedText.slice(0, 140) : undefined;
+}
+
+export function getChatBubbleText(text: string, maxLength = 70) {
+  const normalizedText = normalizeOutgoingChatText(text);
+
+  if (!normalizedText) {
+    return undefined;
+  }
+
+  const safeMaxLength = Math.max(4, maxLength);
+
+  return normalizedText.length > safeMaxLength
+    ? `${normalizedText.slice(0, safeMaxLength - 3)}...`
+    : normalizedText;
 }
 
 export function normalizeChatMessage(value: unknown): ChatMessage | undefined {
@@ -337,6 +406,10 @@ function normalizeAnimation(value: unknown): PlayerAnimation {
 
 function finiteNumber(value: unknown) {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
+function lerp(start: number, end: number, progress: number) {
+  return start + (end - start) * progress;
 }
 
 function parseJson(value: unknown) {

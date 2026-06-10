@@ -24,6 +24,8 @@ import {
   createMultiplayerConnection,
   formatMultiplayerStatus,
   getAdminJoinCode,
+  getChatBubbleText,
+  getInterpolatedRemotePlayer,
   getPlayerTextureKey,
   normalizePlayerName,
   normalizeOutgoingChatText,
@@ -32,6 +34,7 @@ import {
   type PlayerAnimation,
   type PlayerRole,
   type RemotePlayer,
+  type RemotePlayerInterpolationSample,
   type RoomSnapshot,
   shouldReleaseChatFocus,
 } from './multiplayerClient';
@@ -76,10 +79,17 @@ const ACTIVE_PLATFORM_FALLING_LOOKAHEAD_SECONDS = 0.75;
 const BACKGROUND_FLOOR_INTERVAL = 10;
 const BACKGROUND_FADE_DURATION_MS = 320;
 const MULTIPLAYER_SEND_INTERVAL_MS = 80;
-const REMOTE_PLAYER_LERP = 0.34;
+const REMOTE_PLAYER_INTERPOLATION_DELAY_MS = 120;
+const REMOTE_PLAYER_MAX_PREDICTION_MS = 140;
+const REMOTE_PLAYER_SAMPLE_LIMIT = 8;
 const ENABLE_PHYSICS_DEBUG = import.meta.env.DEV;
 const PLAYER_NAME_SESSION_KEY = 'dongstory-player-name';
 const MAX_CHAT_MESSAGES = 40;
+const CHAT_BUBBLE_DURATION_MS = 4200;
+const CHAT_BUBBLE_MAX_WIDTH = 180;
+const CHAT_BUBBLE_PADDING_X = 10;
+const CHAT_BUBBLE_PADDING_Y = 7;
+const CHAT_BUBBLE_Y_OFFSET = 112;
 const PLAYER_VISUAL_FOOT_OFFSET = 5;
 const BACKGROUND_ASSET_URLS = [
   '/assets/background.png',
@@ -181,7 +191,14 @@ type PlatformView = {
 type RemotePlayerView = {
   sprite: Phaser.GameObjects.Sprite;
   label: Phaser.GameObjects.Text;
-  target: RemotePlayer;
+  samples: RemotePlayerInterpolationSample[];
+};
+
+type ChatBubbleView = {
+  container: Phaser.GameObjects.Container;
+  background: Phaser.GameObjects.Graphics;
+  text: Phaser.GameObjects.Text;
+  expiresAt: number;
 };
 
 const PLATFORM_DEFINITIONS = createZigzagPlatformDefinitions({
@@ -249,6 +266,7 @@ class MainScene extends Phaser.Scene {
   private activeStoryObjectViews = new Map<number, StoryObjectView>();
   private activeStoryDialogueViews = new Map<number, StoryDialogueView>();
   private remotePlayerViews = new Map<string, RemotePlayerView>();
+  private chatBubbleViews = new Map<string, ChatBubbleView>();
   private loadingStoryPhotoTextureKeys = new Set<string>();
   private multiplayerConnection?: MultiplayerConnection;
   private localPlayerId?: string;
@@ -372,6 +390,7 @@ class MainScene extends Phaser.Scene {
     this.updateStoryObjectPopups(body.center.x, body.center.y);
     this.updateStoryDialogue(body.center.x, body.center.y);
     this.updateRemotePlayerViews();
+    this.updateChatBubbles();
     this.sendMultiplayerUpdate(this.time.now, body);
 
     if (this.debugKey && Phaser.Input.Keyboard.JustDown(this.debugKey)) {
@@ -881,6 +900,7 @@ class MainScene extends Phaser.Scene {
   private addChatMessage(message: ChatMessage) {
     this.chatMessages = [...this.chatMessages, message].slice(-MAX_CHAT_MESSAGES);
     this.renderChatMessages();
+    this.showChatBubble(message.playerId, message.text);
   }
 
   private renderChatMessages() {
@@ -924,15 +944,22 @@ class MainScene extends Phaser.Scene {
 
       view.sprite.destroy();
       view.label.destroy();
+      this.destroyChatBubble(id);
       this.remotePlayerViews.delete(id);
     });
   }
 
   private upsertRemotePlayer(remotePlayer: RemotePlayer) {
     const existingView = this.remotePlayerViews.get(remotePlayer.id);
+    const receivedAt = this.time.now;
 
     if (existingView) {
-      existingView.target = remotePlayer;
+      existingView.samples = [
+        ...existingView.samples,
+        { receivedAt, player: remotePlayer },
+      ].slice(-REMOTE_PLAYER_SAMPLE_LIMIT);
+      existingView.label.setText(remotePlayer.name);
+      existingView.sprite.setTexture(getPlayerTextureKey(remotePlayer.role), existingView.sprite.frame.name);
       return;
     }
 
@@ -957,18 +984,139 @@ class MainScene extends Phaser.Scene {
     this.remotePlayerViews.set(remotePlayer.id, {
       sprite,
       label,
-      target: remotePlayer,
+      samples: [{ receivedAt, player: remotePlayer }],
     });
   }
 
   private updateRemotePlayerViews() {
-    this.remotePlayerViews.forEach(({ sprite, label, target }) => {
-      sprite.x = Phaser.Math.Linear(sprite.x, target.x, REMOTE_PLAYER_LERP);
-      sprite.y = Phaser.Math.Linear(sprite.y, target.y + PLAYER_VISUAL_FOOT_OFFSET, REMOTE_PLAYER_LERP);
-      sprite.setFlipX(target.facing === 'right');
-      sprite.play(this.getPlayerAnimationKey(target.role, target.animation), true);
+    this.remotePlayerViews.forEach(({ sprite, label, samples }) => {
+      const player = getInterpolatedRemotePlayer(
+        samples,
+        this.time.now,
+        REMOTE_PLAYER_INTERPOLATION_DELAY_MS,
+        REMOTE_PLAYER_MAX_PREDICTION_MS,
+      );
+
+      if (!player) {
+        return;
+      }
+
+      sprite.setPosition(player.x, player.y + PLAYER_VISUAL_FOOT_OFFSET);
+      sprite.setFlipX(player.facing === 'right');
+      sprite.play(this.getPlayerAnimationKey(player.role, player.animation), true);
       label.setPosition(sprite.x, sprite.y - 84);
     });
+  }
+
+  private showChatBubble(playerId: string, text: string) {
+    const bubbleText = getChatBubbleText(text);
+
+    if (!bubbleText || !this.getChatBubbleAnchor(playerId)) {
+      return;
+    }
+
+    const existingBubble = this.chatBubbleViews.get(playerId);
+
+    if (existingBubble) {
+      existingBubble.text.setText(bubbleText);
+      existingBubble.expiresAt = this.time.now + CHAT_BUBBLE_DURATION_MS;
+      this.layoutChatBubble(existingBubble);
+      return;
+    }
+
+    const background = this.add.graphics();
+    const label = this.add
+      .text(0, 0, bubbleText, {
+        align: 'center',
+        color: '#18202a',
+        fontFamily: 'system-ui, Segoe UI, sans-serif',
+        fontSize: '13px',
+        fontStyle: '800',
+        lineSpacing: 2,
+        wordWrap: { width: CHAT_BUBBLE_MAX_WIDTH },
+      })
+      .setOrigin(0.5, 1);
+    const container = this.add
+      .container(0, 0, [background, label])
+      .setDepth(34);
+    const bubble: ChatBubbleView = {
+      container,
+      background,
+      text: label,
+      expiresAt: this.time.now + CHAT_BUBBLE_DURATION_MS,
+    };
+
+    this.chatBubbleViews.set(playerId, bubble);
+    this.layoutChatBubble(bubble);
+    this.updateChatBubblePosition(playerId, bubble);
+  }
+
+  private updateChatBubbles() {
+    this.chatBubbleViews.forEach((bubble, playerId) => {
+      if (this.time.now >= bubble.expiresAt) {
+        this.destroyChatBubble(playerId);
+        return;
+      }
+
+      this.updateChatBubblePosition(playerId, bubble);
+    });
+  }
+
+  private updateChatBubblePosition(playerId: string, bubble: ChatBubbleView) {
+    const anchor = this.getChatBubbleAnchor(playerId);
+
+    if (!anchor) {
+      bubble.container.setVisible(false);
+      return;
+    }
+
+    bubble.container
+      .setVisible(true)
+      .setPosition(anchor.x, anchor.y - CHAT_BUBBLE_Y_OFFSET);
+  }
+
+  private getChatBubbleAnchor(playerId: string) {
+    if (playerId === this.localPlayerId) {
+      return {
+        x: this.playerVisual.x,
+        y: this.playerVisual.y,
+      };
+    }
+
+    const remoteView = this.remotePlayerViews.get(playerId);
+
+    return remoteView
+      ? { x: remoteView.sprite.x, y: remoteView.sprite.y }
+      : undefined;
+  }
+
+  private layoutChatBubble(bubble: ChatBubbleView) {
+    const width = Math.min(
+      CHAT_BUBBLE_MAX_WIDTH + CHAT_BUBBLE_PADDING_X * 2,
+      bubble.text.width + CHAT_BUBBLE_PADDING_X * 2,
+    );
+    const height = bubble.text.height + CHAT_BUBBLE_PADDING_Y * 2;
+    const radius = 8;
+
+    bubble.text.setPosition(0, -CHAT_BUBBLE_PADDING_Y);
+    bubble.background.clear();
+    bubble.background.fillStyle(0xfff8da, 0.94);
+    bubble.background.lineStyle(2, 0x4a3a24, 0.8);
+    bubble.background.fillRoundedRect(-width / 2, -height, width, height, radius);
+    bubble.background.strokeRoundedRect(-width / 2, -height, width, height, radius);
+    bubble.background.fillTriangle(-6, 0, 6, 0, 0, 8);
+    bubble.background.strokeTriangle(-6, 0, 6, 0, 0, 8);
+  }
+
+  private destroyChatBubble(playerId: string) {
+    const bubble = this.chatBubbleViews.get(playerId);
+
+    if (!bubble) {
+      return;
+    }
+
+    bubble.container.destroy(true);
+    this.chatBubbleViews.delete(playerId);
   }
 
   private sendMultiplayerUpdate(now: number, body: Phaser.Physics.Arcade.Body) {

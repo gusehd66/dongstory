@@ -30,6 +30,7 @@ import {
   type PlayerAnimation,
   type RemotePlayer,
   type RoomSnapshot,
+  shouldReleaseChatFocus,
 } from './multiplayerClient';
 
 const GAME_WIDTH = 1200;
@@ -827,6 +828,8 @@ class MainScene extends Phaser.Scene {
       return;
     }
 
+    this.connectGameFocusRelease(input);
+
     input.addEventListener('keydown', (event) => {
       event.stopPropagation();
     });
@@ -841,6 +844,24 @@ class MainScene extends Phaser.Scene {
       }
 
       input.value = '';
+    });
+  }
+
+  private connectGameFocusRelease(input: HTMLInputElement) {
+    const app = document.querySelector<HTMLElement>('#app');
+    const chatPanel = document.querySelector<HTMLElement>('#chat-panel');
+
+    app?.addEventListener('pointerdown', (event) => {
+      const activeElement = document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : undefined;
+      const clickedInsideChatPanel = event.target instanceof Node
+        ? Boolean(chatPanel?.contains(event.target))
+        : false;
+
+      if (shouldReleaseChatFocus(activeElement?.id, clickedInsideChatPanel)) {
+        input.blur();
+      }
     });
   }
 

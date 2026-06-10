@@ -273,6 +273,10 @@ export function normalizeChatMessage(value: unknown): ChatMessage | undefined {
   };
 }
 
+export function shouldReleaseChatFocus(activeElementId: string | undefined, clickedInsideChatPanel: boolean) {
+  return activeElementId === 'chat-input' && !clickedInsideChatPanel;
+}
+
 function normalizeRemotePlayer(value: unknown): RemotePlayer | undefined {
   if (!isRecord(value)) {
     return undefined;

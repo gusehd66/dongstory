@@ -9,6 +9,7 @@ import {
   normalizePlayerName,
   normalizeMultiplayerNotice,
   normalizeRoomSnapshot,
+  shouldReleaseChatFocus,
 } from '../dist-test/multiplayerClient.js';
 
 test('creates a websocket url from a page location', () => {
@@ -132,4 +133,10 @@ test('normalizes incoming chat messages and drops invalid payloads', () => {
     text: '',
     sentAt: 123,
   }), undefined);
+});
+
+test('releases chat focus only when clicking outside the chat panel', () => {
+  assert.equal(shouldReleaseChatFocus('chat-input', false), true);
+  assert.equal(shouldReleaseChatFocus('chat-input', true), false);
+  assert.equal(shouldReleaseChatFocus('nickname-input', false), false);
 });

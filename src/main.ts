@@ -77,6 +77,7 @@ const BACKGROUND_FLOOR_INTERVAL = 10;
 const BACKGROUND_FADE_DURATION_MS = 320;
 const MULTIPLAYER_SEND_INTERVAL_MS = 80;
 const REMOTE_PLAYER_LERP = 0.34;
+const ENABLE_PHYSICS_DEBUG = import.meta.env.DEV;
 const PLAYER_NAME_SESSION_KEY = 'dongstory-player-name';
 const MAX_CHAT_MESSAGES = 40;
 const PLAYER_VISUAL_FOOT_OFFSET = 5;
@@ -241,7 +242,7 @@ class MainScene extends Phaser.Scene {
   private playerVisual!: Phaser.GameObjects.Sprite;
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   private jumpKey!: Phaser.Input.Keyboard.Key;
-  private debugKey!: Phaser.Input.Keyboard.Key;
+  private debugKey?: Phaser.Input.Keyboard.Key;
   private debugEnabled = false;
   private platforms!: Phaser.Physics.Arcade.StaticGroup;
   private activePlatformViews = new Map<number, PlatformView>();
@@ -317,7 +318,9 @@ class MainScene extends Phaser.Scene {
 
     this.cursors = this.input.keyboard!.createCursorKeys();
     this.jumpKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
-    this.debugKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.D);
+    if (ENABLE_PHYSICS_DEBUG) {
+      this.debugKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.D);
+    }
 
     this.cameras.main.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
     this.cameras.main.startFollow(this.player, true, 0.12, 0.08);
@@ -372,7 +375,7 @@ class MainScene extends Phaser.Scene {
     this.updateRemotePlayerViews();
     this.sendMultiplayerUpdate(this.time.now, body);
 
-    if (Phaser.Input.Keyboard.JustDown(this.debugKey)) {
+    if (this.debugKey && Phaser.Input.Keyboard.JustDown(this.debugKey)) {
       this.setPhysicsDebug(!this.debugEnabled);
     }
   }
@@ -1209,7 +1212,7 @@ const config: Phaser.Types.Core.GameConfig = {
     default: 'arcade',
     arcade: {
       gravity: { x: 0, y: 940 },
-      debug: true,
+      debug: ENABLE_PHYSICS_DEBUG,
     },
   },
   scene: MainScene,

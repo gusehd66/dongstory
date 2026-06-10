@@ -293,7 +293,6 @@ class MainScene extends Phaser.Scene {
       .setScrollFactor(0)
       .setDepth(-20);
     this.physics.world.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
-    this.setPhysicsDebug(false);
 
     this.platforms = this.physics.add.staticGroup();
     this.createGround(this.platforms);
@@ -1169,12 +1168,18 @@ class MainScene extends Phaser.Scene {
   }
 
   private setPhysicsDebug(enabled: boolean) {
+    const debugGraphic = this.physics.world.debugGraphic;
+
+    if (!debugGraphic) {
+      return;
+    }
+
     this.debugEnabled = enabled;
     this.physics.world.drawDebug = enabled;
-    this.physics.world.debugGraphic.setVisible(enabled);
+    debugGraphic.setVisible(enabled);
 
     if (!enabled) {
-      this.physics.world.debugGraphic.clear();
+      debugGraphic.clear();
     }
   }
 

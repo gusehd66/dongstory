@@ -1,5 +1,6 @@
 export type PlayerFacing = 'left' | 'right';
 export type PlayerAnimation = 'idle' | 'run' | 'jump' | 'crouch';
+export type PlayerRole = 'admin' | 'normal';
 
 export type LocalPlayerUpdate = {
   x: number;
@@ -14,6 +15,7 @@ export type LocalPlayerUpdate = {
 export type RemotePlayer = LocalPlayerUpdate & {
   id: string;
   name: string;
+  role: PlayerRole;
 };
 
 export type RoomSnapshot = {
@@ -43,9 +45,11 @@ export type MultiplayerConnection = {
 export type MultiplayerConnectionOptions = {
   url?: string;
   name?: string;
+  adminCode?: string;
   onSnapshot: (snapshot: RoomSnapshot) => void;
   onChatMessage?: (message: ChatMessage) => void;
   onLocalPlayerId?: (id: string) => void;
+  onLocalPlayer?: (player: RemotePlayer) => void;
   onNotice?: (notice: MultiplayerNotice) => void;
 };
 
@@ -82,9 +86,11 @@ export function normalizeRoomSnapshot(value: unknown): RoomSnapshot {
 export function createMultiplayerConnection({
   url = createMultiplayerUrl(new URL(window.location.href)),
   name,
+  adminCode,
   onSnapshot,
   onChatMessage,
   onLocalPlayerId,
+  onLocalPlayer,
   onNotice,
 }: MultiplayerConnectionOptions): MultiplayerConnection | undefined {
   if (!('WebSocket' in window)) {
@@ -105,7 +111,7 @@ export function createMultiplayerConnection({
     socket = new WebSocket(url);
 
     socket.addEventListener('open', () => {
-      socket?.send(JSON.stringify({ type: 'player:join', name }));
+      socket?.send(JSON.stringify({ type: 'player:join', name, adminCode }));
     });
 
     socket.addEventListener('message', (event) => {
@@ -115,6 +121,7 @@ export function createMultiplayerConnection({
         localPlayerId = message.id;
         reconnectAttempt = 0;
         onLocalPlayerId?.(message.id);
+        onLocalPlayer?.(message.player);
         onNotice?.({
           type: 'connected',
           message: wasDisconnected ? '멀티플레이 다시 연결됨' : '멀티플레이 연결됨',
@@ -243,6 +250,16 @@ export function normalizePlayerName(name: string) {
   return trimmedName ? trimmedName.slice(0, 18) : undefined;
 }
 
+export function getAdminJoinCode(pageLocation: URL) {
+  const adminCode = pageLocation.searchParams.get('admin')?.trim();
+
+  return adminCode || undefined;
+}
+
+export function getPlayerTextureKey(role: PlayerRole) {
+  return role === 'admin' ? 'player-admin' : 'player-normal';
+}
+
 export function normalizeOutgoingChatText(text: string) {
   const trimmedText = text.trim();
 
@@ -304,7 +321,12 @@ function normalizeRemotePlayer(value: unknown): RemotePlayer | undefined {
     floor,
     facing: value.facing === 'left' ? 'left' : 'right',
     animation: normalizeAnimation(value.animation),
+    role: normalizePlayerRole(value.role),
   };
+}
+
+function normalizePlayerRole(value: unknown): PlayerRole {
+  return value === 'admin' ? 'admin' : 'normal';
 }
 
 function normalizeAnimation(value: unknown): PlayerAnimation {

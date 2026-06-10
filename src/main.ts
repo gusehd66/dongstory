@@ -23,11 +23,14 @@ import {
 import {
   createMultiplayerConnection,
   formatMultiplayerStatus,
+  getAdminJoinCode,
+  getPlayerTextureKey,
   normalizePlayerName,
   normalizeOutgoingChatText,
   type ChatMessage,
   type MultiplayerConnection,
   type PlayerAnimation,
+  type PlayerRole,
   type RemotePlayer,
   type RoomSnapshot,
   shouldReleaseChatFocus,
@@ -50,7 +53,7 @@ const PLATFORM_VISUAL_CROP_X = 112;
 const PLATFORM_VISUAL_CROP_Y = 0;
 const PLATFORM_VISUAL_CROP_WIDTH = 1559;
 const PLATFORM_VISUAL_CROP_HEIGHT = 845;
-const DEFAULT_PLATFORM_FLOOR_COUNT = 30;
+const DEFAULT_PLATFORM_FLOOR_COUNT = 80;
 const PLATFORM_VERTICAL_GAP = 126;
 const PLAYER_START_X = 160;
 const STORY_OBJECT_Y_OFFSET = 44;
@@ -86,9 +89,6 @@ const BACKGROUND_ASSET_URLS = [
   '/assets/background6.png',
   '/assets/background7.png',
   '/assets/background8.png',
-  '/assets/background9.png',
-  '/assets/background10.png',
-  '/assets/background11.png',
 ];
 const STORY_PHOTO_URLS = [
   '/assets/photo/wedding_1.jpg',
@@ -219,7 +219,9 @@ const STORY_DIALOGUE_DEFINITIONS_BY_PLATFORM_INDEX = new Map(
   ]),
 );
 
-const PLAYER_TEXTURE_KEY = 'player';
+const PLAYER_ADMIN_TEXTURE_KEY = getPlayerTextureKey('admin');
+const PLAYER_NORMAL_TEXTURE_KEY = getPlayerTextureKey('normal');
+const PLAYER_ROLES: PlayerRole[] = ['admin', 'normal'];
 const PLAYER_FRAMES: PlayerFrameDefinition[] = [
   { name: 'idle-0', x: 144, y: 207, width: 131, height: 172 },
   { name: 'walk-0', x: 123, y: 387, width: 129, height: 172 },
@@ -249,6 +251,7 @@ class MainScene extends Phaser.Scene {
   private loadingStoryPhotoTextureKeys = new Set<string>();
   private multiplayerConnection?: MultiplayerConnection;
   private localPlayerId?: string;
+  private localPlayerRole: PlayerRole = 'normal';
   private multiplayerPlayerCount?: number;
   private chatMessages: ChatMessage[] = [];
   private lastMultiplayerSentAt = 0;
@@ -268,7 +271,8 @@ class MainScene extends Phaser.Scene {
     });
     this.load.image('ground', '/assets/ground.png');
     this.load.image('stool', '/assets/stool1.png');
-    this.load.image(PLAYER_TEXTURE_KEY, '/assets/player-transparent.png');
+    this.load.image(PLAYER_ADMIN_TEXTURE_KEY, '/assets/player.png');
+    this.load.image(PLAYER_NORMAL_TEXTURE_KEY, '/assets/player-normal.png');
     this.createRectTexture('player-body', 46, 58, 0x2f80ed);
     this.createRectTexture('ground-collider', GROUND_VISUAL_WIDTH, GROUND_COLLIDER_HEIGHT, 0x00ff00);
     this.createRectTexture('platform-small-collider', PLATFORM_COLLIDER_WIDTH, PLATFORM_COLLIDER_HEIGHT, 0x00ff00);
@@ -293,7 +297,9 @@ class MainScene extends Phaser.Scene {
     this.platforms = this.physics.add.staticGroup();
     this.createGround(this.platforms);
 
-    this.registerPlayerFrames();
+    PLAYER_ROLES.forEach((role) => {
+      this.registerPlayerFrames(getPlayerTextureKey(role));
+    });
     this.createAnimations();
 
     this.player = this.physics.add.sprite(PLAYER_START_X, PLAYER_START_Y, 'player-body');
@@ -302,10 +308,10 @@ class MainScene extends Phaser.Scene {
     this.player.setDragX(1800);
     this.player.setMaxVelocity(340, 760);
 
-    this.playerVisual = this.add.sprite(this.player.x, this.player.y, PLAYER_TEXTURE_KEY, 'idle-0');
+    this.playerVisual = this.add.sprite(this.player.x, this.player.y, getPlayerTextureKey(this.localPlayerRole), 'idle-0');
     this.playerVisual.setOrigin(0.5, 1);
     this.playerVisual.setScale(0.42);
-    this.playerVisual.play('player-idle');
+    this.playerVisual.play(this.getPlayerAnimationKey(this.localPlayerRole, 'idle'));
 
     this.physics.add.collider(this.player, this.platforms);
 
@@ -803,9 +809,14 @@ class MainScene extends Phaser.Scene {
 
     this.multiplayerConnection = createMultiplayerConnection({
       name: playerName,
+      adminCode: getAdminJoinCode(new URL(window.location.href)),
       onLocalPlayerId: (id) => {
         this.localPlayerId = id;
         this.updateMultiplayerStatus();
+      },
+      onLocalPlayer: (player) => {
+        this.localPlayerRole = player.role;
+        this.applyLocalPlayerRole();
       },
       onSnapshot: (snapshot) => {
         this.multiplayerPlayerCount = snapshot.players.length;
@@ -924,7 +935,7 @@ class MainScene extends Phaser.Scene {
     }
 
     const sprite = this.add
-      .sprite(remotePlayer.x, remotePlayer.y + PLAYER_VISUAL_FOOT_OFFSET, PLAYER_TEXTURE_KEY, 'idle-0')
+      .sprite(remotePlayer.x, remotePlayer.y + PLAYER_VISUAL_FOOT_OFFSET, getPlayerTextureKey(remotePlayer.role), 'idle-0')
       .setOrigin(0.5, 1)
       .setScale(0.42)
       .setAlpha(0.72)
@@ -953,7 +964,7 @@ class MainScene extends Phaser.Scene {
       sprite.x = Phaser.Math.Linear(sprite.x, target.x, REMOTE_PLAYER_LERP);
       sprite.y = Phaser.Math.Linear(sprite.y, target.y + PLAYER_VISUAL_FOOT_OFFSET, REMOTE_PLAYER_LERP);
       sprite.setFlipX(target.facing === 'right');
-      sprite.play(this.getPlayerAnimationKey(target.animation), true);
+      sprite.play(this.getPlayerAnimationKey(target.role, target.animation), true);
       label.setPosition(sprite.x, sprite.y - 84);
     });
   }
@@ -1066,73 +1077,82 @@ class MainScene extends Phaser.Scene {
   }
 
   private createAnimations() {
-    this.anims.create({
-      key: 'player-idle',
-      frames: [{ key: PLAYER_TEXTURE_KEY, frame: 'idle-0' }],
-      frameRate: 1,
-      repeat: -1,
-    });
+    PLAYER_ROLES.forEach((role) => {
+      const textureKey = getPlayerTextureKey(role);
 
-    this.anims.create({
-      key: 'player-run',
-      frames: [
-        { key: PLAYER_TEXTURE_KEY, frame: 'walk-0' },
-        { key: PLAYER_TEXTURE_KEY, frame: 'walk-1' },
-        { key: PLAYER_TEXTURE_KEY, frame: 'walk-2' },
-        { key: PLAYER_TEXTURE_KEY, frame: 'walk-1' },
-      ],
-      frameRate: 9,
-      repeat: -1,
-    });
+      this.anims.create({
+        key: this.getPlayerAnimationKey(role, 'idle'),
+        frames: [{ key: textureKey, frame: 'idle-0' }],
+        frameRate: 1,
+        repeat: -1,
+      });
 
-    this.anims.create({
-      key: 'player-jump',
-      frames: [
-        { key: PLAYER_TEXTURE_KEY, frame: 'jump-0' },
-        { key: PLAYER_TEXTURE_KEY, frame: 'jump-1' },
-      ],
-      frameRate: 5,
-      repeat: -1,
-    });
+      this.anims.create({
+        key: this.getPlayerAnimationKey(role, 'run'),
+        frames: [
+          { key: textureKey, frame: 'walk-0' },
+          { key: textureKey, frame: 'walk-1' },
+          { key: textureKey, frame: 'walk-2' },
+          { key: textureKey, frame: 'walk-1' },
+        ],
+        frameRate: 9,
+        repeat: -1,
+      });
 
-    this.anims.create({
-      key: 'player-crouch',
-      frames: [
-        { key: PLAYER_TEXTURE_KEY, frame: 'crouch-0' },
-        { key: PLAYER_TEXTURE_KEY, frame: 'crouch-1' },
-        { key: PLAYER_TEXTURE_KEY, frame: 'crouch-2' },
-        { key: PLAYER_TEXTURE_KEY, frame: 'crouch-3' },
-      ],
-      frameRate: 6,
-      repeat: -1,
+      this.anims.create({
+        key: this.getPlayerAnimationKey(role, 'jump'),
+        frames: [
+          { key: textureKey, frame: 'jump-0' },
+          { key: textureKey, frame: 'jump-1' },
+        ],
+        frameRate: 5,
+        repeat: -1,
+      });
+
+      this.anims.create({
+        key: this.getPlayerAnimationKey(role, 'crouch'),
+        frames: [
+          { key: textureKey, frame: 'crouch-0' },
+          { key: textureKey, frame: 'crouch-1' },
+          { key: textureKey, frame: 'crouch-2' },
+          { key: textureKey, frame: 'crouch-3' },
+        ],
+        frameRate: 6,
+        repeat: -1,
+      });
     });
   }
 
   private updatePlayerAnimation(isGrounded: boolean, isMoving: boolean, isCrouching: boolean) {
     if (!isGrounded) {
       this.playerAnimationState = 'jump';
-      this.playerVisual.play('player-jump', true);
+      this.playerVisual.play(this.getPlayerAnimationKey(this.localPlayerRole, 'jump'), true);
       return;
     }
 
     if (isCrouching) {
       this.playerAnimationState = 'crouch';
-      this.playerVisual.play('player-crouch', true);
+      this.playerVisual.play(this.getPlayerAnimationKey(this.localPlayerRole, 'crouch'), true);
       return;
     }
 
     if (isMoving) {
       this.playerAnimationState = 'run';
-      this.playerVisual.play('player-run', true);
+      this.playerVisual.play(this.getPlayerAnimationKey(this.localPlayerRole, 'run'), true);
       return;
     }
 
     this.playerAnimationState = 'idle';
-    this.playerVisual.play('player-idle', true);
+    this.playerVisual.play(this.getPlayerAnimationKey(this.localPlayerRole, 'idle'), true);
   }
 
-  private getPlayerAnimationKey(animation: PlayerAnimation) {
-    return `player-${animation}`;
+  private getPlayerAnimationKey(role: PlayerRole, animation: PlayerAnimation) {
+    return `${getPlayerTextureKey(role)}-${animation}`;
+  }
+
+  private applyLocalPlayerRole() {
+    this.playerVisual.setTexture(getPlayerTextureKey(this.localPlayerRole), 'idle-0');
+    this.playerVisual.play(this.getPlayerAnimationKey(this.localPlayerRole, this.playerAnimationState), true);
   }
 
   private syncPlayerVisual() {
@@ -1155,8 +1175,8 @@ class MainScene extends Phaser.Scene {
     }
   }
 
-  private registerPlayerFrames() {
-    const texture = this.textures.get(PLAYER_TEXTURE_KEY);
+  private registerPlayerFrames(textureKey: string) {
+    const texture = this.textures.get(textureKey);
 
     PLAYER_FRAMES.forEach(({ name, x, y, width, height }) => {
       if (!texture.has(name)) {

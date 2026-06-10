@@ -11,9 +11,10 @@ const HOST = process.env.HOST ?? process.env.MULTIPLAYER_HOST ?? (process.env.PO
 const SNAPSHOT_INTERVAL_MS = 100;
 const HEARTBEAT_INTERVAL_MS = 30000;
 const CHAT_MESSAGE_MAX_LENGTH = 140;
+const ADMIN_JOIN_CODE = process.env.ADMIN_JOIN_CODE;
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const distDir = join(__dirname, '..', 'dist');
-const room = createMultiplayerRoom();
+const room = createMultiplayerRoom({ adminJoinCode: ADMIN_JOIN_CODE });
 const socketsByPlayerId = new Map();
 const staticFiles = createStaticFileResponder(distDir);
 const snapshotBroadcaster = createSnapshotBroadcaster({
@@ -49,7 +50,7 @@ server.on('connection', (socket) => {
     }
 
     if (message.type === 'player:join' && !playerId) {
-      const result = room.join(message.name);
+      const result = room.join(message.name, message.adminCode);
 
       if (!result.accepted) {
         socket.send(JSON.stringify({ type: 'room:full', message: result.message }));

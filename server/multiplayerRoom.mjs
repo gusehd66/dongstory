@@ -10,11 +10,11 @@ const DEFAULT_PLAYER_STATE = {
 const DEFAULT_MAX_PLAYERS = 20;
 const ROOM_FULL_MESSAGE = '방이 가득 찼습니다';
 
-export function createMultiplayerRoom({ maxPlayers = DEFAULT_MAX_PLAYERS } = {}) {
+export function createMultiplayerRoom({ maxPlayers = DEFAULT_MAX_PLAYERS, adminJoinCode } = {}) {
   const players = new Map();
   let nextGuestNumber = 1;
 
-  function join(requestedName) {
+  function join(requestedName, joinCode) {
     if (players.size >= maxPlayers) {
       return {
         accepted: false,
@@ -25,7 +25,8 @@ export function createMultiplayerRoom({ maxPlayers = DEFAULT_MAX_PLAYERS } = {})
 
     const id = globalThis.crypto.randomUUID();
     const name = normalizeName(requestedName) ?? `Guest ${nextGuestNumber++}`;
-    const player = { id, name, ...DEFAULT_PLAYER_STATE };
+    const role = adminJoinCode && joinCode === adminJoinCode ? 'admin' : 'normal';
+    const player = { id, name, role, ...DEFAULT_PLAYER_STATE };
 
     players.set(id, player);
 

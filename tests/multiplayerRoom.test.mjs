@@ -31,6 +31,7 @@ test('stores the latest player movement state', () => {
   assert.deepEqual(room.getSnapshot().players[0], {
     id: player.id,
     name: 'Dodo',
+    role: 'normal',
     x: 320,
     y: 640,
     velocityX: -20,
@@ -39,6 +40,25 @@ test('stores the latest player movement state', () => {
     facing: 'left',
     animation: 'run',
   });
+});
+
+test('marks players as admin only when they join with the configured admin code', () => {
+  const room = createMultiplayerRoom({ adminJoinCode: 'admin' });
+
+  const admin = room.join('Owner', 'admin');
+  const normal = room.join('Guest', 'wrong-code');
+
+  assert.equal(admin.accepted, true);
+  assert.equal(admin.player.role, 'admin');
+  assert.equal(normal.accepted, true);
+  assert.equal(normal.player.role, 'normal');
+  assert.deepEqual(
+    room.getSnapshot().players.map((player) => ({ name: player.name, role: player.role })),
+    [
+      { name: 'Owner', role: 'admin' },
+      { name: 'Guest', role: 'normal' },
+    ],
+  );
 });
 
 test('removes players from snapshots when they leave', () => {

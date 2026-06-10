@@ -307,8 +307,8 @@ canvas {
 .chat-panel {
   position: absolute;
   left: 18px;
-  top: 18px;
-  z-index: 6;
+  bottom: 18px;
+  z-index: 4;
   display: grid;
   gap: 8px;
   width: 330px;
@@ -357,12 +357,9 @@ canvas {
 
 .chat-panel__form {
   display: grid;
-  grid-template-columns: 1fr 58px;
-  gap: 6px;
 }
 
-.chat-panel__input,
-.chat-panel__button {
+.chat-panel__input {
   height: 34px;
   border-radius: 8px;
   font: 900 13px system-ui, 'Segoe UI', sans-serif;
@@ -378,17 +375,6 @@ canvas {
 
 .chat-panel__input::placeholder {
   color: rgba(224, 242, 254, 0.68);
-}
-
-.chat-panel__button {
-  border: 0;
-  background: #38bdf8;
-  color: #082f49;
-  cursor: pointer;
-}
-
-.chat-panel__button:hover {
-  filter: brightness(1.08);
 }
 
 .dialogue-box {

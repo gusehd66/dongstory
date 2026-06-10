@@ -250,11 +250,14 @@ test('assigns detail and thumb photos to matching story objects', () => {
 });
 
 test('expands the platform count to the highest story photo floor', () => {
-  assert.equal(getRequiredFloorCount(30, []), 30);
-  assert.equal(getRequiredFloorCount(30, [
+  assert.equal(getRequiredFloorCount(80, []), 80);
+  assert.equal(getRequiredFloorCount(80, [
     { floor: 2, objectId: 'story-object-1' },
     { floor: 48, objectId: 'story-object-47' },
-  ]), 48);
+  ]), 80);
+  assert.equal(getRequiredFloorCount(80, [
+    { floor: 96, objectId: 'story-object-95' },
+  ]), 96);
 });
 
 test('creates supabase public storage urls from paths', () => {
@@ -359,11 +362,13 @@ test('returns active platform indexes around the camera with a falling buffer', 
 });
 
 test('selects a background asset every 10 floors and caps at the last asset', () => {
-  assert.equal(getBackgroundAssetIndexForFloor(0, 11, 10), 0);
-  assert.equal(getBackgroundAssetIndexForFloor(9, 11, 10), 0);
-  assert.equal(getBackgroundAssetIndexForFloor(10, 11, 10), 1);
-  assert.equal(getBackgroundAssetIndexForFloor(29, 11, 10), 2);
-  assert.equal(getBackgroundAssetIndexForFloor(100, 11, 10), 10);
+  assert.equal(getBackgroundAssetIndexForFloor(0, 8, 10), 0);
+  assert.equal(getBackgroundAssetIndexForFloor(9, 8, 10), 0);
+  assert.equal(getBackgroundAssetIndexForFloor(10, 8, 10), 1);
+  assert.equal(getBackgroundAssetIndexForFloor(29, 8, 10), 2);
+  assert.equal(getBackgroundAssetIndexForFloor(70, 8, 10), 7);
+  assert.equal(getBackgroundAssetIndexForFloor(79, 8, 10), 7);
+  assert.equal(getBackgroundAssetIndexForFloor(100, 8, 10), 7);
 });
 
 test('returns detail panel data for story objects', () => {

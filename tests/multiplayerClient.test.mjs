@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   createMultiplayerUrl,
   formatMultiplayerStatus,
+  getAdminJoinCode,
   getReconnectDelay,
   normalizeChatMessage,
   normalizeOutgoingChatText,
@@ -10,6 +11,7 @@ import {
   normalizeMultiplayerNotice,
   normalizeRoomSnapshot,
   shouldReleaseChatFocus,
+  getPlayerTextureKey,
 } from '../dist-test/multiplayerClient.js';
 
 test('creates a websocket url from a page location', () => {
@@ -27,6 +29,12 @@ test('creates a websocket url from a page location', () => {
   );
 });
 
+test('reads an admin join code from the page url', () => {
+  assert.equal(getAdminJoinCode(new URL('https://example.com/game?admin=admin')), 'admin');
+  assert.equal(getAdminJoinCode(new URL('https://example.com/game?admin=')), undefined);
+  assert.equal(getAdminJoinCode(new URL('https://example.com/game')), undefined);
+});
+
 test('normalizes valid room snapshots and drops invalid players', () => {
   const snapshot = normalizeRoomSnapshot({
     type: 'room:snapshot',
@@ -41,6 +49,7 @@ test('normalizes valid room snapshots and drops invalid players', () => {
         floor: 3,
         facing: 'left',
         animation: 'run',
+        role: 'admin',
       },
       {
         id: 'broken',
@@ -62,9 +71,37 @@ test('normalizes valid room snapshots and drops invalid players', () => {
         floor: 3,
         facing: 'left',
         animation: 'run',
+        role: 'admin',
       },
     ],
   });
+});
+
+test('falls back to a normal role for room snapshots without a valid role', () => {
+  const snapshot = normalizeRoomSnapshot({
+    type: 'room:snapshot',
+    players: [
+      {
+        id: 'one',
+        name: 'Sugar',
+        x: 10,
+        y: 20,
+        velocityX: 1,
+        velocityY: 2,
+        floor: 3,
+        facing: 'left',
+        animation: 'run',
+        role: 'owner',
+      },
+    ],
+  });
+
+  assert.equal(snapshot.players[0].role, 'normal');
+});
+
+test('selects a player texture key by role', () => {
+  assert.equal(getPlayerTextureKey('admin'), 'player-admin');
+  assert.equal(getPlayerTextureKey('normal'), 'player-normal');
 });
 
 test('normalizes room full notices', () => {

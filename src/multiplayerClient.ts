@@ -20,6 +20,14 @@ export type RoomSnapshot = {
   players: RemotePlayer[];
 };
 
+export type ChatMessage = {
+  id: string;
+  playerId: string;
+  playerName: string;
+  text: string;
+  sentAt: number;
+};
+
 export type MultiplayerNotice = {
   type: 'room-full' | 'connection-lost' | 'reconnecting' | 'connected';
   message: string;
@@ -28,6 +36,7 @@ export type MultiplayerNotice = {
 export type MultiplayerConnection = {
   readonly localPlayerId?: string;
   sendPlayerUpdate: (update: LocalPlayerUpdate) => void;
+  sendChatMessage: (text: string) => boolean;
   disconnect: () => void;
 };
 
@@ -35,6 +44,7 @@ export type MultiplayerConnectionOptions = {
   url?: string;
   name?: string;
   onSnapshot: (snapshot: RoomSnapshot) => void;
+  onChatMessage?: (message: ChatMessage) => void;
   onLocalPlayerId?: (id: string) => void;
   onNotice?: (notice: MultiplayerNotice) => void;
 };
@@ -73,6 +83,7 @@ export function createMultiplayerConnection({
   url = createMultiplayerUrl(new URL(window.location.href)),
   name,
   onSnapshot,
+  onChatMessage,
   onLocalPlayerId,
   onNotice,
 }: MultiplayerConnectionOptions): MultiplayerConnection | undefined {
@@ -119,6 +130,13 @@ export function createMultiplayerConnection({
 
       if (isRoomSnapshotMessage(message)) {
         onSnapshot(normalizeRoomSnapshot(message));
+        return;
+      }
+
+      const chatMessage = normalizeChatMessage(message);
+
+      if (chatMessage) {
+        onChatMessage?.(chatMessage);
         return;
       }
 
@@ -174,6 +192,16 @@ export function createMultiplayerConnection({
 
       socket.send(JSON.stringify({ type: 'player:update', ...update }));
     },
+    sendChatMessage(text) {
+      const normalizedText = normalizeOutgoingChatText(text);
+
+      if (!normalizedText || socket?.readyState !== WebSocket.OPEN) {
+        return false;
+      }
+
+      socket.send(JSON.stringify({ type: 'chat:send', text: normalizedText }));
+      return true;
+    },
     disconnect() {
       isClosedByClient = true;
 
@@ -213,6 +241,36 @@ export function normalizePlayerName(name: string) {
   const trimmedName = name.trim();
 
   return trimmedName ? trimmedName.slice(0, 18) : undefined;
+}
+
+export function normalizeOutgoingChatText(text: string) {
+  const trimmedText = text.trim();
+
+  return trimmedText ? trimmedText.slice(0, 140) : undefined;
+}
+
+export function normalizeChatMessage(value: unknown): ChatMessage | undefined {
+  if (!isRecord(value) || value.type !== 'chat:message') {
+    return undefined;
+  }
+
+  const id = typeof value.id === 'string' ? value.id : undefined;
+  const playerId = typeof value.playerId === 'string' ? value.playerId : undefined;
+  const playerName = typeof value.playerName === 'string' ? value.playerName : undefined;
+  const text = typeof value.text === 'string' ? normalizeOutgoingChatText(value.text) : undefined;
+  const sentAt = typeof value.sentAt === 'number' && Number.isFinite(value.sentAt) ? value.sentAt : undefined;
+
+  if (!id || !playerId || !playerName || !text || sentAt === undefined) {
+    return undefined;
+  }
+
+  return {
+    id,
+    playerId,
+    playerName,
+    text,
+    sentAt,
+  };
 }
 
 function normalizeRemotePlayer(value: unknown): RemotePlayer | undefined {

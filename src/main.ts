@@ -24,6 +24,8 @@ import {
   createMultiplayerConnection,
   formatMultiplayerStatus,
   normalizePlayerName,
+  normalizeOutgoingChatText,
+  type ChatMessage,
   type MultiplayerConnection,
   type PlayerAnimation,
   type RemotePlayer,
@@ -72,6 +74,7 @@ const BACKGROUND_FADE_DURATION_MS = 320;
 const MULTIPLAYER_SEND_INTERVAL_MS = 80;
 const REMOTE_PLAYER_LERP = 0.34;
 const PLAYER_NAME_SESSION_KEY = 'dongstory-player-name';
+const MAX_CHAT_MESSAGES = 40;
 const PLAYER_VISUAL_FOOT_OFFSET = 5;
 const BACKGROUND_ASSET_URLS = [
   '/assets/background.png',
@@ -246,6 +249,7 @@ class MainScene extends Phaser.Scene {
   private multiplayerConnection?: MultiplayerConnection;
   private localPlayerId?: string;
   private multiplayerPlayerCount?: number;
+  private chatMessages: ChatMessage[] = [];
   private lastMultiplayerSentAt = 0;
   private playerAnimationState: PlayerAnimation = 'idle';
   private currentFloor = 0;
@@ -765,11 +769,13 @@ class MainScene extends Phaser.Scene {
     const gate = document.querySelector<HTMLElement>('#nickname-gate');
 
     if (!form || !input || !gate) {
+      document.querySelector<HTMLElement>('#chat-panel')?.classList.remove('is-hidden');
       this.connectMultiplayer();
       return;
     }
 
     input.value = window.sessionStorage.getItem(PLAYER_NAME_SESSION_KEY) ?? '';
+    this.connectChatForm();
     this.updateMultiplayerStatus();
 
     form.addEventListener('submit', (event) => {
@@ -784,6 +790,7 @@ class MainScene extends Phaser.Scene {
       }
 
       gate.classList.add('is-hidden');
+      document.querySelector<HTMLElement>('#chat-panel')?.classList.remove('is-hidden');
       this.connectMultiplayer(playerName);
     });
   }
@@ -804,11 +811,64 @@ class MainScene extends Phaser.Scene {
         this.applyMultiplayerSnapshot(snapshot);
         this.updateMultiplayerStatus();
       },
+      onChatMessage: (message) => this.addChatMessage(message),
       onNotice: (notice) => {
         this.updateMultiplayerStatus(notice.message, notice.type === 'room-full' || notice.type === 'connection-lost');
       },
     });
     this.updateMultiplayerStatus('멀티플레이 연결 중');
+  }
+
+  private connectChatForm() {
+    const form = document.querySelector<HTMLFormElement>('#chat-form');
+    const input = document.querySelector<HTMLInputElement>('#chat-input');
+
+    if (!form || !input) {
+      return;
+    }
+
+    input.addEventListener('keydown', (event) => {
+      event.stopPropagation();
+    });
+
+    form.addEventListener('submit', (event) => {
+      event.preventDefault();
+
+      const text = normalizeOutgoingChatText(input.value);
+
+      if (!text || !this.multiplayerConnection?.sendChatMessage(text)) {
+        return;
+      }
+
+      input.value = '';
+    });
+  }
+
+  private addChatMessage(message: ChatMessage) {
+    this.chatMessages = [...this.chatMessages, message].slice(-MAX_CHAT_MESSAGES);
+    this.renderChatMessages();
+  }
+
+  private renderChatMessages() {
+    const log = document.querySelector<HTMLElement>('#chat-log');
+
+    if (!log) {
+      return;
+    }
+
+    log.replaceChildren(...this.chatMessages.map((message) => {
+      const row = document.createElement('div');
+      const name = document.createElement('strong');
+      const text = document.createElement('span');
+
+      row.className = 'chat-panel__message';
+      name.textContent = message.playerName;
+      text.textContent = message.text;
+      row.append(name, text);
+
+      return row;
+    }));
+    log.scrollTop = log.scrollHeight;
   }
 
   private applyMultiplayerSnapshot(snapshot: RoomSnapshot) {

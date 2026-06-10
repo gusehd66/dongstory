@@ -4,6 +4,8 @@ import {
   createMultiplayerUrl,
   formatMultiplayerStatus,
   getReconnectDelay,
+  normalizeChatMessage,
+  normalizeOutgoingChatText,
   normalizePlayerName,
   normalizeMultiplayerNotice,
   normalizeRoomSnapshot,
@@ -97,4 +99,37 @@ test('normalizes player names before joining multiplayer', () => {
   assert.equal(normalizePlayerName(''), undefined);
   assert.equal(normalizePlayerName('                  '), undefined);
   assert.equal(normalizePlayerName('abcdefghijklmnopqrst'), 'abcdefghijklmnopqr');
+});
+
+test('normalizes outgoing chat text before sending', () => {
+  assert.equal(normalizeOutgoingChatText('  hello dongstory  '), 'hello dongstory');
+  assert.equal(normalizeOutgoingChatText(''), undefined);
+  assert.equal(normalizeOutgoingChatText('     '), undefined);
+  assert.equal(normalizeOutgoingChatText('a'.repeat(180)).length, 140);
+});
+
+test('normalizes incoming chat messages and drops invalid payloads', () => {
+  assert.deepEqual(normalizeChatMessage({
+    type: 'chat:message',
+    id: 'chat-1',
+    playerId: 'player-1',
+    playerName: 'Dodo',
+    text: 'hello',
+    sentAt: 123,
+  }), {
+    id: 'chat-1',
+    playerId: 'player-1',
+    playerName: 'Dodo',
+    text: 'hello',
+    sentAt: 123,
+  });
+
+  assert.equal(normalizeChatMessage({
+    type: 'chat:message',
+    id: 'bad',
+    playerId: 'player-1',
+    playerName: 'Dodo',
+    text: '',
+    sentAt: 123,
+  }), undefined);
 });

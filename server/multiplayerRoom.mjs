@@ -63,11 +63,18 @@ export function createMultiplayerRoom({ maxPlayers = DEFAULT_MAX_PLAYERS } = {})
     };
   }
 
+  function getPlayer(id) {
+    const player = players.get(id);
+
+    return player ? { ...player } : undefined;
+  }
+
   return {
     join,
     update,
     leave,
     getSnapshot,
+    getPlayer,
   };
 }
 

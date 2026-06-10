@@ -10,6 +10,7 @@ const PORT = Number.parseInt(process.env.PORT ?? process.env.MULTIPLAYER_PORT ??
 const HOST = process.env.HOST ?? process.env.MULTIPLAYER_HOST ?? (process.env.PORT ? '0.0.0.0' : '127.0.0.1');
 const SNAPSHOT_INTERVAL_MS = 100;
 const HEARTBEAT_INTERVAL_MS = 30000;
+const CHAT_MESSAGE_MAX_LENGTH = 140;
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const distDir = join(__dirname, '..', 'dist');
 const room = createMultiplayerRoom();
@@ -67,6 +68,11 @@ server.on('connection', (socket) => {
     if (message.type === 'player:update' && playerId) {
       room.update(playerId, message);
       snapshotBroadcaster.requestBroadcast();
+      return;
+    }
+
+    if (message.type === 'chat:send' && playerId) {
+      broadcastChatMessage(playerId, message.text);
     }
   });
 
@@ -106,11 +112,43 @@ server.on('close', () => {
 function broadcastSnapshot() {
   const message = JSON.stringify({ type: 'room:snapshot', ...room.getSnapshot() });
 
+  sendToOpenSockets(message);
+}
+
+function broadcastChatMessage(playerId, text) {
+  const player = room.getPlayer(playerId);
+  const chatText = normalizeChatText(text);
+
+  if (!player || !chatText) {
+    return;
+  }
+
+  sendToOpenSockets(JSON.stringify({
+    type: 'chat:message',
+    id: globalThis.crypto.randomUUID(),
+    playerId: player.id,
+    playerName: player.name,
+    text: chatText,
+    sentAt: Date.now(),
+  }));
+}
+
+function sendToOpenSockets(message) {
   socketsByPlayerId.forEach((socket) => {
     if (socket.readyState === WebSocket.OPEN) {
       socket.send(message);
     }
   });
+}
+
+function normalizeChatText(text) {
+  if (typeof text !== 'string') {
+    return undefined;
+  }
+
+  const trimmedText = text.trim();
+
+  return trimmedText ? trimmedText.slice(0, CHAT_MESSAGE_MAX_LENGTH) : undefined;
 }
 
 function parseJson(data) {

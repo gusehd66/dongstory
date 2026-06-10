@@ -124,12 +124,25 @@ function broadcastChatMessage(playerId, text) {
     return;
   }
 
+  const commandResult = room.createAdminChatCommandMessages(playerId, chatText);
+
+  if (commandResult.handled) {
+    commandResult.messages.forEach((message) => {
+      sendChatMessage(message.playerId, message.playerName, message.text);
+    });
+    return;
+  }
+
+  sendChatMessage(player.id, player.name, chatText);
+}
+
+function sendChatMessage(playerId, playerName, text) {
   sendToOpenSockets(JSON.stringify({
     type: 'chat:message',
     id: globalThis.crypto.randomUUID(),
-    playerId: player.id,
-    playerName: player.name,
-    text: chatText,
+    playerId,
+    playerName,
+    text,
     sentAt: Date.now(),
   }));
 }

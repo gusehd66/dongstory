@@ -61,6 +61,58 @@ test('marks players as admin only when they join with the configured admin code'
   );
 });
 
+test('creates admin cheer messages for every other player', () => {
+  const room = createMultiplayerRoom({ adminJoinCode: 'admin' });
+  const admin = room.join('김현동', 'admin').player;
+  const sugar = room.join('Sugar').player;
+  const dodo = room.join('Dodo').player;
+
+  assert.deepEqual(room.createAdminChatCommandMessages(admin.id, '/만세'), {
+    handled: true,
+    messages: [
+      {
+        playerId: sugar.id,
+        playerName: 'Sugar',
+        text: '김현동 만세!!!!',
+      },
+      {
+        playerId: dodo.id,
+        playerName: 'Dodo',
+        text: '김현동 만세!!!!',
+      },
+    ],
+  });
+});
+
+test('creates admin cheer messages for one named player', () => {
+  const room = createMultiplayerRoom({ adminJoinCode: 'admin' });
+  const admin = room.join('김현동', 'admin').player;
+  room.join('Sugar');
+  const dodo = room.join('Dodo').player;
+
+  assert.deepEqual(room.createAdminChatCommandMessages(admin.id, '/만세:Dodo'), {
+    handled: true,
+    messages: [
+      {
+        playerId: dodo.id,
+        playerName: 'Dodo',
+        text: '김현동 만세!!!!',
+      },
+    ],
+  });
+});
+
+test('does not run admin chat commands for normal players', () => {
+  const room = createMultiplayerRoom({ adminJoinCode: 'admin' });
+  const normal = room.join('Guest').player;
+  room.join('Dodo');
+
+  assert.deepEqual(room.createAdminChatCommandMessages(normal.id, '/만세'), {
+    handled: false,
+    messages: [],
+  });
+});
+
 test('removes players from snapshots when they leave', () => {
   const room = createMultiplayerRoom();
   const player = room.join('Guest');

@@ -8,6 +8,7 @@ const DEFAULT_PLAYER_STATE = {
   animation: 'idle',
 };
 const DEFAULT_MAX_PLAYERS = 20;
+const CHEER_COMMAND = '/만세';
 const ROOM_FULL_MESSAGE = '방이 가득 찼습니다';
 
 export function createMultiplayerRoom({ maxPlayers = DEFAULT_MAX_PLAYERS, adminJoinCode } = {}) {
@@ -70,12 +71,33 @@ export function createMultiplayerRoom({ maxPlayers = DEFAULT_MAX_PLAYERS, adminJ
     return player ? { ...player } : undefined;
   }
 
+  function createAdminChatCommandMessages(actorId, text) {
+    const actor = players.get(actorId);
+    const command = parseCheerCommand(text);
+
+    if (!actor || actor.role !== 'admin' || !command) {
+      return { handled: false, messages: [] };
+    }
+
+    const targets = command.targetName
+      ? [...players.values()].filter((player) => normalizeNameForMatch(player.name) === command.targetName)
+      : [...players.values()].filter((player) => player.id !== actor.id);
+    const messages = targets.map((player) => ({
+      playerId: player.id,
+      playerName: player.name,
+      text: `${actor.name} 만세!!!!`,
+    }));
+
+    return { handled: true, messages };
+  }
+
   return {
     join,
     update,
     leave,
     getSnapshot,
     getPlayer,
+    createAdminChatCommandMessages,
   };
 }
 
@@ -101,4 +123,28 @@ function normalizeAnimation(animation, fallback) {
   return animation === 'run' || animation === 'jump' || animation === 'crouch' || animation === 'idle'
     ? animation
     : fallback;
+}
+
+function parseCheerCommand(text) {
+  if (typeof text !== 'string') {
+    return undefined;
+  }
+
+  const trimmedText = text.trim();
+
+  if (trimmedText === CHEER_COMMAND) {
+    return {};
+  }
+
+  if (!trimmedText.startsWith(`${CHEER_COMMAND}:`)) {
+    return undefined;
+  }
+
+  const targetName = normalizeNameForMatch(trimmedText.slice(CHEER_COMMAND.length + 1));
+
+  return targetName ? { targetName } : undefined;
+}
+
+function normalizeNameForMatch(name) {
+  return normalizeName(name)?.toLocaleLowerCase();
 }

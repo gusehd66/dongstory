@@ -64,6 +64,7 @@ const BACKGROUND_FADE_DURATION_MS = 320;
 const MULTIPLAYER_SEND_INTERVAL_MS = 80;
 const REMOTE_PLAYER_LERP = 0.34;
 const PLAYER_NAME_SESSION_KEY = 'dongstory-player-name';
+const PLAYER_VISUAL_FOOT_OFFSET = 5;
 const BACKGROUND_ASSET_URLS = [
   '/assets/background.png',
   '/assets/background2.png',
@@ -828,7 +829,7 @@ class MainScene extends Phaser.Scene {
     }
 
     const sprite = this.add
-      .sprite(remotePlayer.x, remotePlayer.y, PLAYER_TEXTURE_KEY, 'idle-0')
+      .sprite(remotePlayer.x, remotePlayer.y + PLAYER_VISUAL_FOOT_OFFSET, PLAYER_TEXTURE_KEY, 'idle-0')
       .setOrigin(0.5, 1)
       .setScale(0.42)
       .setAlpha(0.72)
@@ -855,7 +856,7 @@ class MainScene extends Phaser.Scene {
   private updateRemotePlayerViews() {
     this.remotePlayerViews.forEach(({ sprite, label, target }) => {
       sprite.x = Phaser.Math.Linear(sprite.x, target.x, REMOTE_PLAYER_LERP);
-      sprite.y = Phaser.Math.Linear(sprite.y, target.y, REMOTE_PLAYER_LERP);
+      sprite.y = Phaser.Math.Linear(sprite.y, target.y + PLAYER_VISUAL_FOOT_OFFSET, REMOTE_PLAYER_LERP);
       sprite.setFlipX(target.facing === 'right');
       sprite.play(this.getPlayerAnimationKey(target.animation), true);
       label.setPosition(sprite.x, sprite.y - 84);
@@ -1042,7 +1043,7 @@ class MainScene extends Phaser.Scene {
   private syncPlayerVisual() {
     const body = this.player.body as Phaser.Physics.Arcade.Body;
 
-    this.playerVisual.setPosition(body.center.x, body.bottom);
+    this.playerVisual.setPosition(body.center.x, body.bottom + PLAYER_VISUAL_FOOT_OFFSET);
   }
 
   private isJumpReleased() {

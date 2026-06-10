@@ -37,8 +37,16 @@ const GROUND_COLLIDER_HEIGHT = 28;
 const GROUND_VISUAL_WIDTH = 430;
 const GROUND_VISUAL_HEIGHT = 210;
 const GROUND_TILE_SPACING = 396;
+const PLATFORM_COLLIDER_WIDTH = 128;
 const PLATFORM_COLLIDER_HEIGHT = 18;
 const PLATFORM_COLLIDER_Y_OFFSET = 19;
+const PLATFORM_VISUAL_WIDTH = 142;
+const PLATFORM_VISUAL_HEIGHT = 77;
+const PLATFORM_VISUAL_Y_OFFSET = 34;
+const PLATFORM_VISUAL_CROP_X = 112;
+const PLATFORM_VISUAL_CROP_Y = 0;
+const PLATFORM_VISUAL_CROP_WIDTH = 1559;
+const PLATFORM_VISUAL_CROP_HEIGHT = 845;
 const DEFAULT_PLATFORM_FLOOR_COUNT = 30;
 const PLATFORM_VERTICAL_GAP = 126;
 const PLAYER_START_X = 160;
@@ -258,7 +266,7 @@ class MainScene extends Phaser.Scene {
     this.load.image(PLAYER_TEXTURE_KEY, '/assets/player-transparent.png');
     this.createRectTexture('player-body', 46, 58, 0x2f80ed);
     this.createRectTexture('ground-collider', GROUND_VISUAL_WIDTH, GROUND_COLLIDER_HEIGHT, 0x00ff00);
-    this.createRectTexture('platform-small-collider', 150, PLATFORM_COLLIDER_HEIGHT, 0x00ff00);
+    this.createRectTexture('platform-small-collider', PLATFORM_COLLIDER_WIDTH, PLATFORM_COLLIDER_HEIGHT, 0x00ff00);
   }
 
   create() {
@@ -400,8 +408,14 @@ class MainScene extends Phaser.Scene {
     }
 
     const visual = this.add
-      .image(platform.x, platform.y + 34, 'stool')
-      .setDisplaySize(170, 77);
+      .image(platform.x, platform.y + PLATFORM_VISUAL_Y_OFFSET, 'stool')
+      .setCrop(
+        PLATFORM_VISUAL_CROP_X,
+        PLATFORM_VISUAL_CROP_Y,
+        PLATFORM_VISUAL_CROP_WIDTH,
+        PLATFORM_VISUAL_CROP_HEIGHT,
+      )
+      .setDisplaySize(PLATFORM_VISUAL_WIDTH, PLATFORM_VISUAL_HEIGHT);
     const collider = this.platforms
       .create(platform.x, platform.y + PLATFORM_COLLIDER_Y_OFFSET, 'platform-small-collider')
       .setVisible(false) as Phaser.Physics.Arcade.Sprite;

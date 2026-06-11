@@ -290,8 +290,8 @@ class MainScene extends Phaser.Scene {
     });
     this.load.image('ground', '/assets/ground.png');
     this.load.image('stool', '/assets/stool1.png');
-    this.load.image(PLAYER_ADMIN_TEXTURE_KEY, '/assets/player.png');
-    this.load.image(PLAYER_NORMAL_TEXTURE_KEY, '/assets/player-normal.png');
+    this.load.image(PLAYER_ADMIN_TEXTURE_KEY, '/assets/player-admin-transparent.png');
+    this.load.image(PLAYER_NORMAL_TEXTURE_KEY, '/assets/player-normal2.png');
     this.createRectTexture('player-body', 46, 58, 0x2f80ed);
     this.createRectTexture('ground-collider', GROUND_VISUAL_WIDTH, GROUND_COLLIDER_HEIGHT, 0x00ff00);
     this.createRectTexture('platform-small-collider', PLATFORM_COLLIDER_WIDTH, PLATFORM_COLLIDER_HEIGHT, 0x00ff00);

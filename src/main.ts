@@ -240,32 +240,18 @@ const STORY_DIALOGUE_DEFINITIONS_BY_PLATFORM_INDEX = new Map(
 const PLAYER_ADMIN_TEXTURE_KEY = getPlayerTextureKey('admin');
 const PLAYER_NORMAL_TEXTURE_KEY = getPlayerTextureKey('normal');
 const PLAYER_ROLES: PlayerRole[] = ['admin', 'normal'];
-const PLAYER_FRAME_SETS: Record<PlayerRole, PlayerFrameDefinition[]> = {
-  admin: [
-    { name: 'idle-0', x: 88, y: 20, width: 132, height: 172 },
-    { name: 'walk-0', x: 84, y: 190, width: 132, height: 176 },
-    { name: 'walk-1', x: 240, y: 190, width: 132, height: 176 },
-    { name: 'walk-2', x: 396, y: 190, width: 132, height: 176 },
-    { name: 'jump-0', x: 236, y: 370, width: 140, height: 184 },
-    { name: 'jump-1', x: 236, y: 370, width: 140, height: 184 },
-    { name: 'crouch-0', x: 704, y: 420, width: 150, height: 140 },
-    { name: 'crouch-1', x: 864, y: 428, width: 170, height: 132 },
-    { name: 'crouch-2', x: 1036, y: 436, width: 160, height: 124 },
-    { name: 'crouch-3', x: 1200, y: 448, width: 160, height: 116 },
-  ],
-  normal: [
-    { name: 'idle-0', x: 88, y: 10, width: 140, height: 178 },
-    { name: 'walk-0', x: 86, y: 176, width: 140, height: 176 },
-    { name: 'walk-1', x: 244, y: 176, width: 140, height: 176 },
-    { name: 'walk-2', x: 392, y: 176, width: 140, height: 176 },
-    { name: 'jump-0', x: 236, y: 344, width: 150, height: 186 },
-    { name: 'jump-1', x: 236, y: 344, width: 150, height: 186 },
-    { name: 'crouch-0', x: 852, y: 414, width: 150, height: 122 },
-    { name: 'crouch-1', x: 990, y: 420, width: 135, height: 118 },
-    { name: 'crouch-2', x: 1120, y: 416, width: 160, height: 122 },
-    { name: 'crouch-3', x: 1120, y: 416, width: 160, height: 122 },
-  ],
-};
+const PLAYER_FRAMES: PlayerFrameDefinition[] = [
+  { name: 'idle-0', x: 125, y: 195, width: 150, height: 160 },
+  { name: 'walk-0', x: 120, y: 365, width: 140, height: 170 },
+  { name: 'walk-1', x: 285, y: 365, width: 145, height: 170 },
+  { name: 'walk-2', x: 450, y: 365, width: 140, height: 170 },
+  { name: 'jump-0', x: 270, y: 540, width: 150, height: 180 },
+  { name: 'jump-1', x: 270, y: 540, width: 150, height: 180 },
+  { name: 'crouch-0', x: 620, y: 615, width: 155, height: 105 },
+  { name: 'crouch-1', x: 803, y: 615, width: 155, height: 105 },
+  { name: 'crouch-2', x: 981, y: 615, width: 155, height: 105 },
+  { name: 'crouch-3', x: 1162, y: 615, width: 170, height: 105 },
+];
 
 class MainScene extends Phaser.Scene {
   private backgroundLayer!: Phaser.GameObjects.Image;
@@ -330,7 +316,7 @@ class MainScene extends Phaser.Scene {
     this.createGround(this.platforms);
 
     PLAYER_ROLES.forEach((role) => {
-      this.registerPlayerFrames(getPlayerTextureKey(role), role);
+      this.registerPlayerFrames(getPlayerTextureKey(role));
     });
     this.createAnimations();
 
@@ -1345,10 +1331,10 @@ class MainScene extends Phaser.Scene {
     }
   }
 
-  private registerPlayerFrames(textureKey: string, role: PlayerRole) {
+  private registerPlayerFrames(textureKey: string) {
     const texture = this.textures.get(textureKey);
 
-    PLAYER_FRAME_SETS[role].forEach(({ name, x, y, width, height }) => {
+    PLAYER_FRAMES.forEach(({ name, x, y, width, height }) => {
       if (!texture.has(name)) {
         texture.add(name, 0, x, y, width, height);
       }

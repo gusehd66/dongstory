@@ -7,6 +7,7 @@ import {
 } from '../dist-test/mapLayout.js';
 import {
   createActiveMapLayoutSavePath,
+  loadActiveMapLayout,
   normalizeMapLayoutRow,
 } from '../dist-test/mapLayoutSource.js';
 
@@ -91,6 +92,32 @@ test('normalizeMapLayoutRow rejects rows without valid layout JSON', () => {
 
 test('createActiveMapLayoutSavePath saves by active map name conflict', () => {
   assert.equal(createActiveMapLayoutSavePath(), 'map_layouts?on_conflict=name');
+});
+
+test('loadActiveMapLayout calls default fetch without rebinding it', async () => {
+  const originalFetch = globalThis.fetch;
+
+  try {
+    globalThis.fetch = async function fetchWithGlobalThis(url) {
+      assert.equal(this, globalThis);
+      assert.equal(
+        url,
+        'https://example.supabase.co/rest/v1/map_layouts?select=id,version,layout&is_active=eq.true&order=updated_at.desc&limit=1',
+      );
+
+      return {
+        ok: true,
+        json: async () => [],
+      };
+    };
+
+    assert.equal(await loadActiveMapLayout({
+      supabaseUrl: 'https://example.supabase.co',
+      supabaseAnonKey: 'anon',
+    }), undefined);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test('toPlatformDefinitions removes editor ids for game physics', () => {

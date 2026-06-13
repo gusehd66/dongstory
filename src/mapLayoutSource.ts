@@ -100,7 +100,7 @@ function createSupabaseRequest({ supabaseUrl, supabaseAnonKey, fetcher = fetch }
   }
 
   return {
-    fetcher,
+    fetcher: (url: string, init?: RequestInit) => fetcher.call(globalThis, url, init),
     url: `${supabaseUrl.replace(/\/$/, '')}/rest/v1/${path}`,
     headers: {
       apikey: supabaseAnonKey,

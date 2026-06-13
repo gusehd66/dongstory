@@ -3,6 +3,7 @@ import test from 'node:test';
 import {
   createDefaultEditableMapLayout,
   normalizeEditableMapLayout,
+  toPlatformDefinitions,
 } from '../dist-test/mapLayout.js';
 import { normalizeMapLayoutRow } from '../dist-test/mapLayoutSource.js';
 
@@ -83,4 +84,17 @@ test('normalizeMapLayoutRow extracts active layout metadata', () => {
 
 test('normalizeMapLayoutRow rejects rows without valid layout JSON', () => {
   assert.equal(normalizeMapLayoutRow({ id: 'x', version: 1, layout: null }), undefined);
+});
+
+test('toPlatformDefinitions removes editor ids for game physics', () => {
+  assert.deepEqual(
+    toPlatformDefinitions({
+      version: 1,
+      platforms: [{ id: 'platform-1', x: 12, y: 34, texture: 'platform' }],
+      storyObjects: [],
+      dialogues: [],
+      chairs: [],
+    }),
+    [{ x: 12, y: 34, texture: 'platform' }],
+  );
 });

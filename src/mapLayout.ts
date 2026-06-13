@@ -62,6 +62,10 @@ export function normalizeEditableMapLayout(value: unknown): EditableMapLayout | 
   };
 }
 
+export function toPlatformDefinitions(layout: EditableMapLayout): PlatformDefinition[] {
+  return layout.platforms.map(({ x, y, texture }) => ({ x, y, texture }));
+}
+
 function normalizePlatform(value: unknown): EditablePlatformDefinition[] {
   if (!isRecord(value)) {
     return [];

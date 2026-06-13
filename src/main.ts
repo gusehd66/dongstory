@@ -4,7 +4,6 @@ import {
   createChairDefinition,
   createPlatformDialogueDefinitions,
   createPlatformObjectDefinitions,
-  createZigzagPlatformDefinitions,
   getActivePlatformIndexes,
   getBackgroundAssetIndexForFloor,
   getEstimatedFloorForY,
@@ -20,6 +19,12 @@ import {
   type StoryDialogueSource,
   type StoryObjectDefinition,
 } from './platformLayout';
+import {
+  createDefaultEditableMapLayout,
+  toPlatformDefinitions,
+  type EditableMapLayout,
+} from './mapLayout';
+import { loadActiveMapLayout } from './mapLayoutSource';
 import {
   loadStoryDialoguesFromSupabase,
   loadStoryPhotosFromSupabase,
@@ -245,14 +250,16 @@ type ChatBubbleView = {
   expiresAt: number;
 };
 
-const PLATFORM_DEFINITIONS = createZigzagPlatformDefinitions({
+const DEFAULT_EDITABLE_MAP_LAYOUT = createDefaultEditableMapLayout({
   floorCount: PLATFORM_FLOOR_COUNT,
   leftX: 360,
   rightX: 600,
   bottomY: FIRST_PLATFORM_Y,
   verticalGap: PLATFORM_VERTICAL_GAP,
 });
-const DONG_CHAIR_DEFINITION = createChairDefinition(PLATFORM_DEFINITIONS, {
+let activeMapLayout: EditableMapLayout = await loadActiveMapLayoutSafely(DEFAULT_EDITABLE_MAP_LAYOUT);
+let PLATFORM_DEFINITIONS = toPlatformDefinitions(activeMapLayout);
+let DONG_CHAIR_DEFINITION = createChairDefinition(PLATFORM_DEFINITIONS, {
   id: 'dong-chair',
   platformIndex: DONG_CHAIR_PLATFORM_INDEX,
   facing: DONG_CHAIR_FACING,
@@ -263,33 +270,11 @@ const DONG_CHAIR_DEFINITION = createChairDefinition(PLATFORM_DEFINITIONS, {
   triggerDistance: DONG_CHAIR_TRIGGER_DISTANCE,
 });
 
-const STORY_OBJECT_DEFINITIONS = createPlatformObjectDefinitions(PLATFORM_DEFINITIONS, {
-  yOffset: STORY_OBJECT_Y_OFFSET,
-  label: STORY_OBJECT_LABEL,
-  photoUrls: SUPABASE_STORY_PHOTOS.length > 0 ? [] : STORY_PHOTO_URLS,
-  storyPhotos: SUPABASE_STORY_PHOTOS,
-  reservedFloors: [...STORY_DIALOGUE_FLOORS, DONG_CHAIR_PLATFORM_INDEX + 1],
-});
-const STORY_OBJECT_DEFINITIONS_BY_PLATFORM_INDEX = new Map(
-  STORY_OBJECT_DEFINITIONS.map((definition) => [
-    Number.parseInt(definition.id.replace('story-object-', ''), 10),
-    definition,
-  ]),
-);
+let STORY_OBJECT_DEFINITIONS = createStoryObjectDefinitionsForLayout(activeMapLayout);
+let STORY_OBJECT_DEFINITIONS_BY_PLATFORM_INDEX = createStoryObjectDefinitionIndex(STORY_OBJECT_DEFINITIONS);
 
-const STORY_DIALOGUE_DEFINITIONS = createPlatformDialogueDefinitions(PLATFORM_DEFINITIONS, {
-  xOffset: STORY_DIALOGUE_X_OFFSET,
-  yOffset: STORY_DIALOGUE_Y_OFFSET,
-  floors: STORY_DIALOGUE_FLOORS,
-  lines: STORY_DIALOGUE_LINES,
-  storyDialogues: SUPABASE_STORY_DIALOGUES,
-});
-const STORY_DIALOGUE_DEFINITIONS_BY_PLATFORM_INDEX = new Map(
-  STORY_DIALOGUE_DEFINITIONS.map((definition) => [
-    Number.parseInt(definition.id.replace('dialogue-object-', ''), 10),
-    definition,
-  ]),
-);
+let STORY_DIALOGUE_DEFINITIONS = createStoryDialogueDefinitionsForLayout(activeMapLayout);
+let STORY_DIALOGUE_DEFINITIONS_BY_PLATFORM_INDEX = createStoryDialogueDefinitionIndex(STORY_DIALOGUE_DEFINITIONS);
 
 const PLAYER_ADMIN_TEXTURE_KEY = getPlayerTextureKey('admin');
 const PLAYER_NORMAL_TEXTURE_KEY = getPlayerTextureKey('normal');
@@ -991,11 +976,42 @@ class MainScene extends Phaser.Scene {
         this.updateMultiplayerStatus();
       },
       onChatMessage: (message) => this.addChatMessage(message),
+      onMapUpdated: () => {
+        void this.reloadActiveMapLayout();
+      },
       onNotice: (notice) => {
         this.updateMultiplayerStatus(notice.message, notice.type === 'room-full' || notice.type === 'connection-lost');
       },
     });
     this.updateMultiplayerStatus('멀티플레이 연결 중');
+  }
+
+  private async reloadActiveMapLayout() {
+    const nextLayout = await loadActiveMapLayoutSafely(activeMapLayout);
+
+    activeMapLayout = nextLayout;
+    PLATFORM_DEFINITIONS = toPlatformDefinitions(nextLayout);
+    DONG_CHAIR_DEFINITION = createChairDefinition(PLATFORM_DEFINITIONS, {
+      id: 'dong-chair',
+      platformIndex: DONG_CHAIR_PLATFORM_INDEX,
+      facing: DONG_CHAIR_FACING,
+      xOffset: DONG_CHAIR_X_OFFSET,
+      yOffset: DONG_CHAIR_Y_OFFSET,
+      seatXOffset: DONG_CHAIR_SEAT_X_OFFSET,
+      seatYOffset: DONG_CHAIR_SEAT_Y_OFFSET,
+      triggerDistance: DONG_CHAIR_TRIGGER_DISTANCE,
+    });
+    STORY_OBJECT_DEFINITIONS = createStoryObjectDefinitionsForLayout(nextLayout);
+    STORY_OBJECT_DEFINITIONS_BY_PLATFORM_INDEX = createStoryObjectDefinitionIndex(STORY_OBJECT_DEFINITIONS);
+    STORY_DIALOGUE_DEFINITIONS = createStoryDialogueDefinitionsForLayout(nextLayout);
+    STORY_DIALOGUE_DEFINITIONS_BY_PLATFORM_INDEX = createStoryDialogueDefinitionIndex(STORY_DIALOGUE_DEFINITIONS);
+
+    [...this.activePlatformViews.keys()].forEach((index) => this.destroyPlatform(index));
+    this.activeStoryObjectId = undefined;
+    this.activeStoryDialogueId = undefined;
+    this.updateStoryDetail();
+    this.updateDialogueBox();
+    this.updateActiveFloors(0, this.player.y);
   }
 
   private connectChatForm() {
@@ -1513,6 +1529,70 @@ class MainScene extends Phaser.Scene {
   }
 }
 
+function createStoryObjectDefinitionsForLayout(layout: EditableMapLayout) {
+  return layout.storyObjects.length > 0
+    ? layout.storyObjects
+    : createPlatformObjectDefinitions(PLATFORM_DEFINITIONS, {
+      yOffset: STORY_OBJECT_Y_OFFSET,
+      label: STORY_OBJECT_LABEL,
+      photoUrls: SUPABASE_STORY_PHOTOS.length > 0 ? [] : STORY_PHOTO_URLS,
+      storyPhotos: SUPABASE_STORY_PHOTOS,
+      reservedFloors: [...STORY_DIALOGUE_FLOORS, DONG_CHAIR_PLATFORM_INDEX + 1],
+    });
+}
+
+function createStoryDialogueDefinitionsForLayout(layout: EditableMapLayout) {
+  return layout.dialogues.length > 0
+    ? layout.dialogues
+    : createPlatformDialogueDefinitions(PLATFORM_DEFINITIONS, {
+      xOffset: STORY_DIALOGUE_X_OFFSET,
+      yOffset: STORY_DIALOGUE_Y_OFFSET,
+      floors: STORY_DIALOGUE_FLOORS,
+      lines: STORY_DIALOGUE_LINES,
+      storyDialogues: SUPABASE_STORY_DIALOGUES,
+    });
+}
+
+function createStoryObjectDefinitionIndex(definitions: StoryObjectDefinition[]) {
+  return new Map(definitions.flatMap((definition) => {
+    const index = getDefinitionPlatformIndex(definition, 'story-object-');
+
+    return index === undefined ? [] : [[index, definition] as const];
+  }));
+}
+
+function createStoryDialogueDefinitionIndex(definitions: StoryDialogueDefinition[]) {
+  return new Map(definitions.flatMap((definition) => {
+    const index = getDefinitionPlatformIndex(definition, 'dialogue-object-');
+
+    return index === undefined ? [] : [[index, definition] as const];
+  }));
+}
+
+function getDefinitionPlatformIndex(definition: StoryObjectDefinition | StoryDialogueDefinition, prefix: string) {
+  const parsedIndex = Number.parseInt(definition.id.replace(prefix, ''), 10);
+
+  if (Number.isInteger(parsedIndex) && parsedIndex >= 0 && PLATFORM_DEFINITIONS[parsedIndex]) {
+    return parsedIndex;
+  }
+
+  return getNearestPlatformIndex(definition.x, definition.y);
+}
+
+function getNearestPlatformIndex(x: number, y: number) {
+  if (PLATFORM_DEFINITIONS.length === 0) {
+    return undefined;
+  }
+
+  return PLATFORM_DEFINITIONS.reduce((nearestIndex, platform, index) => {
+    const nearestPlatform = PLATFORM_DEFINITIONS[nearestIndex];
+    const nearestDistance = Math.hypot(x - nearestPlatform.x, y - nearestPlatform.y);
+    const distance = Math.hypot(x - platform.x, y - platform.y);
+
+    return distance < nearestDistance ? index : nearestIndex;
+  }, 0);
+}
+
 const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
   width: GAME_WIDTH,
@@ -1530,6 +1610,15 @@ const config: Phaser.Types.Core.GameConfig = {
 };
 
 new Phaser.Game(config);
+
+async function loadActiveMapLayoutSafely(fallback: EditableMapLayout): Promise<EditableMapLayout> {
+  try {
+    return (await loadActiveMapLayout())?.layout ?? fallback;
+  } catch (error) {
+    console.warn(error);
+    return fallback;
+  }
+}
 
 async function loadSupabaseStoryPhotosSafely() {
   try {

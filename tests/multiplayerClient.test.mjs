@@ -101,6 +101,28 @@ test('falls back to a normal role for room snapshots without a valid role', () =
   assert.equal(snapshot.players[0].role, 'normal');
 });
 
+test('preserves sitting animation in room snapshots', () => {
+  const snapshot = normalizeRoomSnapshot({
+    type: 'room:snapshot',
+    players: [
+      {
+        id: 'one',
+        name: 'Sugar',
+        x: 10,
+        y: 20,
+        velocityX: 0,
+        velocityY: 0,
+        floor: 3,
+        facing: 'right',
+        animation: 'sit',
+        role: 'normal',
+      },
+    ],
+  });
+
+  assert.equal(snapshot.players[0].animation, 'sit');
+});
+
 test('selects a player texture key by role', () => {
   assert.equal(getPlayerTextureKey('admin'), 'player-admin');
   assert.equal(getPlayerTextureKey('normal'), 'player-normal');

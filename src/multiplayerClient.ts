@@ -1,5 +1,5 @@
 export type PlayerFacing = 'left' | 'right';
-export type PlayerAnimation = 'idle' | 'run' | 'jump' | 'crouch';
+export type PlayerAnimation = 'idle' | 'run' | 'jump' | 'crouch' | 'sit';
 export type PlayerRole = 'admin' | 'normal';
 
 export type LocalPlayerUpdate = {
@@ -399,7 +399,7 @@ function normalizePlayerRole(value: unknown): PlayerRole {
 }
 
 function normalizeAnimation(value: unknown): PlayerAnimation {
-  return value === 'run' || value === 'jump' || value === 'crouch' || value === 'idle'
+  return value === 'run' || value === 'jump' || value === 'crouch' || value === 'idle' || value === 'sit'
     ? value
     : 'idle';
 }

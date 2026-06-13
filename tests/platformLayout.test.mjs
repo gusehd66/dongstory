@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   createPlatformDialogueDefinitions,
+  createChairDefinition,
   createPlatformObjectDefinitions,
   createStoryPhotoPublicUrl,
   createZigzagPlatformDefinitions,
@@ -9,9 +10,11 @@ import {
   getBackgroundAssetIndexForFloor,
   getEstimatedFloorForY,
   getFloorTargetPosition,
+  getPlatformVisualVariant,
   getRequiredFloorCount,
   getStandingFloor,
   getStoryObjectDetail,
+  isNearChairSeat,
   isNearStoryObject,
 } from '../dist-test/platformLayout.js';
 
@@ -29,6 +32,14 @@ test('creates uniformly spaced zigzag platforms', () => {
   assert.deepEqual(platforms.map((platform) => platform.x), [360, 600, 360, 600]);
   assert.deepEqual(platforms.map((platform) => platform.y), [7000, 6850, 6700, 6550]);
   assert.ok(platforms.every((platform) => platform.texture === 'platform'));
+});
+
+test('cycles platform visual variants by platform index', () => {
+  assert.deepEqual(
+    [0, 1, 2, 3, 4, 5, 6].map((index) => getPlatformVisualVariant(index, 4)),
+    [0, 1, 2, 3, 0, 1, 2],
+  );
+  assert.equal(getPlatformVisualVariant(3, 0), 0);
 });
 
 test('places one story object above each platform by default', () => {
@@ -276,6 +287,60 @@ test('detects whether the player is close enough to a story point', () => {
 
   assert.equal(isNearStoryObject({ x: 360, y: 7000 }, storyObject, 80), true);
   assert.equal(isNearStoryObject({ x: 460, y: 7000 }, storyObject, 80), false);
+});
+
+test('creates a chair definition from a platform seat anchor', () => {
+  const platforms = [
+    { x: 360, y: 7000, texture: 'platform' },
+    { x: 600, y: 6850, texture: 'platform' },
+  ];
+
+  assert.deepEqual(createChairDefinition(platforms, {
+    id: 'dong-chair',
+    platformIndex: 1,
+    facing: 'left',
+    xOffset: 28,
+    yOffset: 52,
+    seatXOffset: 6,
+    seatYOffset: 40,
+    triggerDistance: 74,
+  }), {
+    id: 'dong-chair',
+    platformIndex: 1,
+    facing: 'left',
+    x: 628,
+    y: 6798,
+    seatX: 634,
+    seatY: 6758,
+    triggerDistance: 74,
+  });
+
+  assert.equal(createChairDefinition(platforms, {
+    id: 'missing-chair',
+    platformIndex: 9,
+    facing: 'right',
+    xOffset: 0,
+    yOffset: 0,
+    seatXOffset: 0,
+    seatYOffset: 0,
+    triggerDistance: 70,
+  }), undefined);
+});
+
+test('detects whether the player is close enough to sit in a chair', () => {
+  const chair = {
+    id: 'dong-chair',
+    platformIndex: 1,
+    facing: 'left',
+    x: 628,
+    y: 6798,
+    seatX: 634,
+    seatY: 6758,
+    triggerDistance: 74,
+  };
+
+  assert.equal(isNearChairSeat({ x: 634, y: 6790 }, chair), true);
+  assert.equal(isNearChairSeat({ x: 720, y: 6790 }, chair), false);
 });
 
 test('detects the standing floor from visible collision surfaces', () => {

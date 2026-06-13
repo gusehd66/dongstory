@@ -50,6 +50,17 @@ export type StoryDialogueDefinition = StoryDialogueLine & {
   y: number;
 };
 
+export type ChairDefinition = {
+  id: string;
+  platformIndex: number;
+  facing: 'left' | 'right';
+  x: number;
+  y: number;
+  seatX: number;
+  seatY: number;
+  triggerDistance: number;
+};
+
 export type ZigzagPlatformOptions = {
   floorCount: number;
   leftX: number;
@@ -72,6 +83,17 @@ export type PlatformDialogueOptions = {
   lines?: StoryDialogueLine[];
   floors?: number[];
   storyDialogues?: StoryDialogueSource[];
+};
+
+export type ChairDefinitionOptions = {
+  id: string;
+  platformIndex: number;
+  facing: 'left' | 'right';
+  xOffset: number;
+  yOffset: number;
+  seatXOffset: number;
+  seatYOffset: number;
+  triggerDistance: number;
 };
 
 export type Point = {
@@ -116,6 +138,14 @@ export function createZigzagPlatformDefinitions({
     y: bottomY - index * verticalGap,
     texture: 'platform',
   }));
+}
+
+export function getPlatformVisualVariant(platformIndex: number, variantCount: number): number {
+  if (variantCount <= 0) {
+    return 0;
+  }
+
+  return Math.abs(platformIndex) % variantCount;
 }
 
 export function createPlatformObjectDefinitions(
@@ -244,6 +274,40 @@ export function createPlatformDialogueDefinitions(
   }, []);
 }
 
+export function createChairDefinition(
+  platforms: PlatformDefinition[],
+  {
+    id,
+    platformIndex,
+    facing,
+    xOffset,
+    yOffset,
+    seatXOffset,
+    seatYOffset,
+    triggerDistance,
+  }: ChairDefinitionOptions,
+): ChairDefinition | undefined {
+  const platform = platforms[platformIndex];
+
+  if (!platform) {
+    return undefined;
+  }
+
+  const x = platform.x + xOffset;
+  const y = platform.y - yOffset;
+
+  return {
+    id,
+    platformIndex,
+    facing,
+    x,
+    y,
+    seatX: x + seatXOffset,
+    seatY: y - seatYOffset,
+    triggerDistance,
+  };
+}
+
 function findNextOpenPlatformIndex(
   platformCount: number,
   startIndex: number,
@@ -264,6 +328,10 @@ export function isNearStoryObject(
   triggerDistance: number,
 ): boolean {
   return Math.hypot(point.x - storyObject.x, point.y - storyObject.y) <= triggerDistance;
+}
+
+export function isNearChairSeat(point: Point, chair: ChairDefinition): boolean {
+  return Math.hypot(point.x - chair.seatX, point.y - chair.seatY) <= chair.triggerDistance;
 }
 
 export function getStoryObjectDetail(storyObject: StoryObjectDefinition): StoryObjectDetail {

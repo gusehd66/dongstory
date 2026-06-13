@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import './style.css';
 import {
+  createChairDefinition,
   createPlatformDialogueDefinitions,
   createPlatformObjectDefinitions,
   createZigzagPlatformDefinitions,
@@ -8,10 +9,13 @@ import {
   getBackgroundAssetIndexForFloor,
   getEstimatedFloorForY,
   getFloorTargetPosition,
+  getPlatformVisualVariant,
   getRequiredFloorCount,
   getStandingFloor,
   getStoryObjectDetail,
+  isNearChairSeat,
   isNearStoryObject,
+  type ChairDefinition,
   type StoryDialogueDefinition,
   type StoryDialogueSource,
   type StoryObjectDefinition,
@@ -49,13 +53,40 @@ const GROUND_TILE_SPACING = 396;
 const PLATFORM_COLLIDER_WIDTH = 128;
 const PLATFORM_COLLIDER_HEIGHT = 18;
 const PLATFORM_COLLIDER_Y_OFFSET = 19;
-const PLATFORM_VISUAL_WIDTH = 142;
-const PLATFORM_VISUAL_HEIGHT = 77;
-const PLATFORM_VISUAL_Y_OFFSET = 34;
 const PLATFORM_VISUAL_CROP_X = 112;
 const PLATFORM_VISUAL_CROP_Y = 0;
 const PLATFORM_VISUAL_CROP_WIDTH = 1559;
 const PLATFORM_VISUAL_CROP_HEIGHT = 845;
+const PLATFORM_VISUAL_VARIANTS = [
+  {
+    colliderKey: 'platform-collider-medium',
+    colliderWidth: PLATFORM_COLLIDER_WIDTH,
+    visualWidth: 142,
+    visualHeight: 77,
+    visualYOffset: 34,
+  },
+  {
+    colliderKey: 'platform-collider-short',
+    colliderWidth: 96,
+    visualWidth: 108,
+    visualHeight: 66,
+    visualYOffset: 29,
+  },
+  {
+    colliderKey: 'platform-collider-long',
+    colliderWidth: 158,
+    visualWidth: 174,
+    visualHeight: 82,
+    visualYOffset: 36,
+  },
+  {
+    colliderKey: 'platform-collider-tiny',
+    colliderWidth: 64,
+    visualWidth: 76,
+    visualHeight: 56,
+    visualYOffset: 24,
+  },
+];
 const DEFAULT_PLATFORM_FLOOR_COUNT = 80;
 const PLATFORM_VERTICAL_GAP = 126;
 const PLAYER_START_X = 160;
@@ -66,6 +97,14 @@ const STORY_DIALOGUE_Y_OFFSET = STORY_OBJECT_Y_OFFSET;
 const STORY_DIALOGUE_TRIGGER_DISTANCE = 70;
 const FALLBACK_STORY_DIALOGUE_FLOORS = [1, 21];
 const STORY_OBJECT_LABEL = '\uC900\uBE44\uC911';
+const DONG_CHAIR_PLATFORM_INDEX = 2;
+const DONG_CHAIR_DISPLAY_SIZE = 108;
+const DONG_CHAIR_X_OFFSET = 34;
+const DONG_CHAIR_Y_OFFSET = 40;
+const DONG_CHAIR_SEAT_X_OFFSET = 2;
+const DONG_CHAIR_SEAT_Y_OFFSET = 16;
+const DONG_CHAIR_TRIGGER_DISTANCE = 82;
+const DONG_CHAIR_FACING = 'left';
 const FLOOR_DETECTION_TOLERANCE = 12;
 const PLAYER_BODY_HEIGHT = 58;
 const PLAYER_HALF_HEIGHT = PLAYER_BODY_HEIGHT / 2;
@@ -188,6 +227,11 @@ type PlatformView = {
   collider: Phaser.Physics.Arcade.Sprite;
 };
 
+type ChairView = {
+  definition: ChairDefinition;
+  sprite: Phaser.GameObjects.Image;
+};
+
 type RemotePlayerView = {
   sprite: Phaser.GameObjects.Sprite;
   label: Phaser.GameObjects.Text;
@@ -208,13 +252,23 @@ const PLATFORM_DEFINITIONS = createZigzagPlatformDefinitions({
   bottomY: FIRST_PLATFORM_Y,
   verticalGap: PLATFORM_VERTICAL_GAP,
 });
+const DONG_CHAIR_DEFINITION = createChairDefinition(PLATFORM_DEFINITIONS, {
+  id: 'dong-chair',
+  platformIndex: DONG_CHAIR_PLATFORM_INDEX,
+  facing: DONG_CHAIR_FACING,
+  xOffset: DONG_CHAIR_X_OFFSET,
+  yOffset: DONG_CHAIR_Y_OFFSET,
+  seatXOffset: DONG_CHAIR_SEAT_X_OFFSET,
+  seatYOffset: DONG_CHAIR_SEAT_Y_OFFSET,
+  triggerDistance: DONG_CHAIR_TRIGGER_DISTANCE,
+});
 
 const STORY_OBJECT_DEFINITIONS = createPlatformObjectDefinitions(PLATFORM_DEFINITIONS, {
   yOffset: STORY_OBJECT_Y_OFFSET,
   label: STORY_OBJECT_LABEL,
   photoUrls: SUPABASE_STORY_PHOTOS.length > 0 ? [] : STORY_PHOTO_URLS,
   storyPhotos: SUPABASE_STORY_PHOTOS,
-  reservedFloors: STORY_DIALOGUE_FLOORS,
+  reservedFloors: [...STORY_DIALOGUE_FLOORS, DONG_CHAIR_PLATFORM_INDEX + 1],
 });
 const STORY_OBJECT_DEFINITIONS_BY_PLATFORM_INDEX = new Map(
   STORY_OBJECT_DEFINITIONS.map((definition) => [
@@ -247,6 +301,10 @@ const PLAYER_FRAMES: PlayerFrameDefinition[] = [
   { name: 'walk-2', x: 450, y: 365, width: 140, height: 170 },
   { name: 'jump-0', x: 270, y: 540, width: 150, height: 180 },
   { name: 'jump-1', x: 270, y: 540, width: 150, height: 180 },
+  { name: 'sit-0', x: 1460, y: 40, width: 150, height: 160 },
+  { name: 'sit-1', x: 1620, y: 40, width: 150, height: 160 },
+  { name: 'sit-2', x: 1780, y: 40, width: 150, height: 160 },
+  { name: 'sit-3', x: 1940, y: 40, width: 150, height: 160 },
   { name: 'crouch-0', x: 620, y: 615, width: 155, height: 105 },
   { name: 'crouch-1', x: 803, y: 615, width: 155, height: 105 },
   { name: 'crouch-2', x: 981, y: 615, width: 155, height: 105 },
@@ -259,12 +317,14 @@ class MainScene extends Phaser.Scene {
   private playerVisual!: Phaser.GameObjects.Sprite;
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   private jumpKey!: Phaser.Input.Keyboard.Key;
+  private interactKey!: Phaser.Input.Keyboard.Key;
   private debugKey?: Phaser.Input.Keyboard.Key;
   private debugEnabled = false;
   private platforms!: Phaser.Physics.Arcade.StaticGroup;
   private activePlatformViews = new Map<number, PlatformView>();
   private activeStoryObjectViews = new Map<number, StoryObjectView>();
   private activeStoryDialogueViews = new Map<number, StoryDialogueView>();
+  private activeChairView?: ChairView;
   private remotePlayerViews = new Map<string, RemotePlayerView>();
   private chatBubbleViews = new Map<string, ChatBubbleView>();
   private loadingStoryPhotoTextureKeys = new Set<string>();
@@ -279,6 +339,7 @@ class MainScene extends Phaser.Scene {
   private activeBackgroundIndex = 0;
   private activeStoryObjectId?: string;
   private activeStoryDialogueId?: string;
+  private isSeated = false;
 
   constructor() {
     super('MainScene');
@@ -290,11 +351,14 @@ class MainScene extends Phaser.Scene {
     });
     this.load.image('ground', '/assets/ground.png');
     this.load.image('stool', '/assets/stool1.png');
+    this.load.image('dong-chair', '/assets/dong-chair.png');
     this.load.image(PLAYER_ADMIN_TEXTURE_KEY, '/assets/player-admin-transparent.png');
     this.load.image(PLAYER_NORMAL_TEXTURE_KEY, '/assets/player-normal2-transparent.png');
     this.createRectTexture('player-body', 46, 58, 0x2f80ed);
     this.createRectTexture('ground-collider', GROUND_VISUAL_WIDTH, GROUND_COLLIDER_HEIGHT, 0x00ff00);
-    this.createRectTexture('platform-small-collider', PLATFORM_COLLIDER_WIDTH, PLATFORM_COLLIDER_HEIGHT, 0x00ff00);
+    PLATFORM_VISUAL_VARIANTS.forEach(({ colliderKey, colliderWidth }) => {
+      this.createRectTexture(colliderKey, colliderWidth, PLATFORM_COLLIDER_HEIGHT, 0x00ff00);
+    });
   }
 
   create() {
@@ -329,12 +393,14 @@ class MainScene extends Phaser.Scene {
     this.playerVisual = this.add.sprite(this.player.x, this.player.y, getPlayerTextureKey(this.localPlayerRole), 'idle-0');
     this.playerVisual.setOrigin(0.5, 1);
     this.playerVisual.setScale(0.42);
+    this.playerVisual.setDepth(20);
     this.playerVisual.play(this.getPlayerAnimationKey(this.localPlayerRole, 'idle'));
 
     this.physics.add.collider(this.player, this.platforms);
 
     this.cursors = this.input.keyboard!.createCursorKeys();
     this.jumpKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
+    this.interactKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.X);
     if (ENABLE_PHYSICS_DEBUG) {
       this.debugKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.D);
     }
@@ -356,14 +422,19 @@ class MainScene extends Phaser.Scene {
     const isGrounded = body.blocked.down || body.touching.down;
     const movingLeft = this.cursors.left?.isDown;
     const movingRight = this.cursors.right?.isDown;
-    const isCrouching = isGrounded && Boolean(this.cursors.down?.isDown);
+    const isCrouching = !this.isSeated && isGrounded && Boolean(this.cursors.down?.isDown);
     const wantsJump =
       Phaser.Input.Keyboard.JustDown(this.jumpKey) ||
       Phaser.Input.Keyboard.JustDown(this.cursors.up);
+    const wantsInteract = Phaser.Input.Keyboard.JustDown(this.interactKey);
 
     this.updateActiveFloors(body.velocity.y, body.center.y);
+    this.handleChairInteraction(wantsInteract, Boolean(movingLeft || movingRight), wantsJump, body);
 
-    if (isCrouching) {
+    if (this.isSeated) {
+      this.player.setAcceleration(0, 0);
+      this.player.setVelocity(0, 0);
+    } else if (isCrouching) {
       this.player.setAccelerationX(0);
     } else if (movingLeft) {
       this.player.setAccelerationX(-runAcceleration);
@@ -375,15 +446,15 @@ class MainScene extends Phaser.Scene {
       this.player.setAccelerationX(0);
     }
 
-    if (wantsJump && isGrounded) {
+    if (!this.isSeated && wantsJump && isGrounded) {
       this.player.setVelocityY(-jumpVelocity);
     }
 
-    if (this.isJumpReleased() && body.velocity.y < jumpCutVelocity) {
+    if (!this.isSeated && this.isJumpReleased() && body.velocity.y < jumpCutVelocity) {
       this.player.setVelocityY(jumpCutVelocity);
     }
 
-    this.updatePlayerAnimation(isGrounded, movingLeft || movingRight, isCrouching);
+    this.updatePlayerAnimation(isGrounded, Boolean(movingLeft || movingRight), isCrouching, this.isSeated);
     this.syncPlayerVisual();
     this.updateBackgroundByHeight(body.bottom);
     this.updateCurrentFloor(isGrounded, body.bottom);
@@ -439,20 +510,24 @@ class MainScene extends Phaser.Scene {
       return;
     }
 
+    const platformVisual = PLATFORM_VISUAL_VARIANTS[
+      getPlatformVisualVariant(index, PLATFORM_VISUAL_VARIANTS.length)
+    ] ?? PLATFORM_VISUAL_VARIANTS[0];
     const visual = this.add
-      .image(platform.x, platform.y + PLATFORM_VISUAL_Y_OFFSET, 'stool')
+      .image(platform.x, platform.y + platformVisual.visualYOffset, 'stool')
       .setCrop(
         PLATFORM_VISUAL_CROP_X,
         PLATFORM_VISUAL_CROP_Y,
         PLATFORM_VISUAL_CROP_WIDTH,
         PLATFORM_VISUAL_CROP_HEIGHT,
       )
-      .setDisplaySize(PLATFORM_VISUAL_WIDTH, PLATFORM_VISUAL_HEIGHT);
+      .setDisplaySize(platformVisual.visualWidth, platformVisual.visualHeight);
     const collider = this.platforms
-      .create(platform.x, platform.y + PLATFORM_COLLIDER_Y_OFFSET, 'platform-small-collider')
+      .create(platform.x, platform.y + PLATFORM_COLLIDER_Y_OFFSET, platformVisual.colliderKey)
       .setVisible(false) as Phaser.Physics.Arcade.Sprite;
 
     this.activePlatformViews.set(index, { visual, collider });
+    this.createDongChair(index);
     this.createStoryObject(index);
     this.createStoryDialogue(index);
   }
@@ -464,6 +539,15 @@ class MainScene extends Phaser.Scene {
       platformView.visual.destroy();
       platformView.collider.destroy();
       this.activePlatformViews.delete(index);
+    }
+
+    if (this.activeChairView?.definition.platformIndex === index) {
+      this.activeChairView.sprite.destroy();
+      this.activeChairView = undefined;
+
+      if (this.isSeated) {
+        this.leaveChair();
+      }
     }
 
     const storyObjectView = this.activeStoryObjectViews.get(index);
@@ -501,6 +585,19 @@ class MainScene extends Phaser.Scene {
 
     this.activeStoryObjectViews.set(index, { definition, marker, popup });
     this.ensureStoryPhotoTexture(index, definition);
+  }
+
+  private createDongChair(index: number) {
+    if (!DONG_CHAIR_DEFINITION || this.activeChairView || index !== DONG_CHAIR_DEFINITION.platformIndex) {
+      return;
+    }
+
+    const sprite = this.add
+      .image(DONG_CHAIR_DEFINITION.x, DONG_CHAIR_DEFINITION.y, 'dong-chair')
+      .setDisplaySize(DONG_CHAIR_DISPLAY_SIZE, DONG_CHAIR_DISPLAY_SIZE)
+      .setDepth(4);
+
+    this.activeChairView = { definition: DONG_CHAIR_DEFINITION, sprite };
   }
 
   private createStoryDialogue(index: number) {
@@ -649,6 +746,55 @@ class MainScene extends Phaser.Scene {
     message.textContent = definition.message;
     initial.textContent = definition.speaker.slice(0, 1);
     box.classList.remove('is-hidden');
+  }
+
+  private handleChairInteraction(
+    wantsInteract: boolean,
+    wantsMove: boolean,
+    wantsJump: boolean,
+    body: Phaser.Physics.Arcade.Body,
+  ) {
+    if (this.isSeated) {
+      if (wantsInteract || wantsMove || wantsJump) {
+        this.leaveChair();
+      }
+
+      return;
+    }
+
+    if (!wantsInteract || !this.activeChairView) {
+      return;
+    }
+
+    if (!isNearChairSeat({ x: body.center.x, y: body.center.y }, this.activeChairView.definition)) {
+      return;
+    }
+
+    this.sitInChair(this.activeChairView.definition);
+  }
+
+  private sitInChair(chair: ChairDefinition) {
+    const body = this.player.body as Phaser.Physics.Arcade.Body;
+
+    this.isSeated = true;
+    body.allowGravity = false;
+    this.player.setAcceleration(0, 0);
+    this.player.setVelocity(0, 0);
+    this.player.setPosition(chair.seatX, chair.seatY);
+    body.reset(chair.seatX, chair.seatY);
+    this.playerVisual.setFlipX(chair.facing === 'right');
+    this.syncPlayerVisual();
+    this.updatePlayerAnimation(true, false, false, true);
+  }
+
+  private leaveChair() {
+    const body = this.player.body as Phaser.Physics.Arcade.Body;
+
+    this.isSeated = false;
+    body.allowGravity = true;
+    this.player.setAcceleration(0, 0);
+    this.player.setVelocity(0, 0);
+    this.updatePlayerAnimation(true, false, false, false);
   }
 
   private updateStoryDetail(definition?: StoryObjectDefinition) {
@@ -1267,33 +1413,45 @@ class MainScene extends Phaser.Scene {
           { key: textureKey, frame: 'crouch-2' },
           { key: textureKey, frame: 'crouch-3' },
         ],
-        frameRate: 6,
-        repeat: -1,
+        frameRate: 7,
+        repeat: 0,
+      });
+
+      this.anims.create({
+        key: this.getPlayerAnimationKey(role, 'sit'),
+        frames: [{ key: textureKey, frame: 'sit-2' }],
+        frameRate: 1,
+        repeat: 0,
       });
     });
   }
 
-  private updatePlayerAnimation(isGrounded: boolean, isMoving: boolean, isCrouching: boolean) {
-    if (!isGrounded) {
-      this.playerAnimationState = 'jump';
-      this.playerVisual.play(this.getPlayerAnimationKey(this.localPlayerRole, 'jump'), true);
+  private updatePlayerAnimation(isGrounded: boolean, isMoving: boolean, isCrouching: boolean, isSeated = false) {
+    let nextAnimationState: PlayerAnimation;
+
+    if (isSeated) {
+      nextAnimationState = 'sit';
+    } else if (!isGrounded) {
+      nextAnimationState = 'jump';
+    } else if (isCrouching) {
+      nextAnimationState = 'crouch';
+    } else if (isMoving) {
+      nextAnimationState = 'run';
+    } else {
+      nextAnimationState = 'idle';
+    }
+
+    const nextAnimationKey = this.getPlayerAnimationKey(this.localPlayerRole, nextAnimationState);
+
+    if (
+      this.playerAnimationState === nextAnimationState &&
+      this.playerVisual.anims.currentAnim?.key === nextAnimationKey
+    ) {
       return;
     }
 
-    if (isCrouching) {
-      this.playerAnimationState = 'crouch';
-      this.playerVisual.play(this.getPlayerAnimationKey(this.localPlayerRole, 'crouch'), true);
-      return;
-    }
-
-    if (isMoving) {
-      this.playerAnimationState = 'run';
-      this.playerVisual.play(this.getPlayerAnimationKey(this.localPlayerRole, 'run'), true);
-      return;
-    }
-
-    this.playerAnimationState = 'idle';
-    this.playerVisual.play(this.getPlayerAnimationKey(this.localPlayerRole, 'idle'), true);
+    this.playerAnimationState = nextAnimationState;
+    this.playerVisual.play(nextAnimationKey, true);
   }
 
   private getPlayerAnimationKey(role: PlayerRole, animation: PlayerAnimation) {

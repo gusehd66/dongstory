@@ -40,6 +40,11 @@ export type MapUpdatedMessage = {
   version: number;
 };
 
+export type MapSaveFailedMessage = {
+  type: 'map:save-failed';
+  message: string;
+};
+
 export type MultiplayerNotice = {
   type: 'room-full' | 'connection-lost' | 'reconnecting' | 'connected';
   message: string;
@@ -50,6 +55,7 @@ export type MultiplayerConnection = {
   sendPlayerUpdate: (update: LocalPlayerUpdate) => void;
   sendChatMessage: (text: string) => boolean;
   sendMapPublish: (version: number) => boolean;
+  sendMapSave: (layout: unknown) => boolean;
   disconnect: () => void;
 };
 
@@ -60,6 +66,7 @@ export type MultiplayerConnectionOptions = {
   onSnapshot: (snapshot: RoomSnapshot) => void;
   onChatMessage?: (message: ChatMessage) => void;
   onMapUpdated?: (message: MapUpdatedMessage) => void;
+  onMapSaveFailed?: (message: MapSaveFailedMessage) => void;
   onLocalPlayerId?: (id: string) => void;
   onLocalPlayer?: (player: RemotePlayer) => void;
   onNotice?: (notice: MultiplayerNotice) => void;
@@ -102,6 +109,7 @@ export function createMultiplayerConnection({
   onSnapshot,
   onChatMessage,
   onMapUpdated,
+  onMapSaveFailed,
   onLocalPlayerId,
   onLocalPlayer,
   onNotice,
@@ -164,6 +172,13 @@ export function createMultiplayerConnection({
 
       if (mapUpdatedMessage) {
         onMapUpdated?.(mapUpdatedMessage);
+        return;
+      }
+
+      const mapSaveFailedMessage = normalizeMapSaveFailedMessage(message);
+
+      if (mapSaveFailedMessage) {
+        onMapSaveFailed?.(mapSaveFailedMessage);
         return;
       }
 
@@ -235,6 +250,14 @@ export function createMultiplayerConnection({
       }
 
       socket.send(JSON.stringify({ type: 'map:publish', version }));
+      return true;
+    },
+    sendMapSave(layout) {
+      if (socket?.readyState !== WebSocket.OPEN) {
+        return false;
+      }
+
+      socket.send(JSON.stringify({ type: 'map:save', layout }));
       return true;
     },
     disconnect() {
@@ -390,6 +413,17 @@ export function normalizeMapUpdatedMessage(value: unknown): MapUpdatedMessage | 
   return {
     type: 'map:updated',
     version: value.version,
+  };
+}
+
+export function normalizeMapSaveFailedMessage(value: unknown): MapSaveFailedMessage | undefined {
+  if (!isRecord(value) || value.type !== 'map:save-failed' || typeof value.message !== 'string') {
+    return undefined;
+  }
+
+  return {
+    type: 'map:save-failed',
+    message: value.message,
   };
 }
 

@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import './style.css';
 import { createDefaultEditableMapLayout, type EditableMapLayout } from './mapLayout';
-import { loadActiveMapLayout, saveActiveMapLayout } from './mapLayoutSource';
+import { loadActiveMapLayout } from './mapLayoutSource';
 import { createMultiplayerConnection, getAdminJoinCode } from './multiplayerClient';
 
 const GAME_WIDTH = 1200;
@@ -37,6 +37,12 @@ const connection = createMultiplayerConnection({
   adminCode: getAdminJoinCode(new URL(window.location.href)),
   name: 'Map Editor',
   onSnapshot: () => undefined,
+  onMapUpdated: () => {
+    setStatus('Saved and published');
+  },
+  onMapSaveFailed: (message) => {
+    setStatus(message.message);
+  },
 });
 
 class EditorScene extends Phaser.Scene {
@@ -235,17 +241,12 @@ function bindTool(buttonId: string, tool: EditorTool) {
 }
 
 async function saveMap() {
-  setStatus('Saving');
-
-  try {
-    const saved = await saveActiveMapLayout(layout);
-    layout = saved.layout;
-    const published = connection?.sendMapPublish(saved.version) ?? false;
-    setStatus(published ? 'Saved and published' : 'Saved, realtime unavailable');
-  } catch (error) {
-    console.warn(error);
-    setStatus('Save failed');
+  if (!connection?.sendMapSave(layout)) {
+    setStatus('Realtime connection unavailable');
+    return;
   }
+
+  setStatus('Saving on server');
 }
 
 function syncForm() {

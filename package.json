@@ -7,7 +7,7 @@
     "dev": "vite",
     "dev:server": "node server/multiplayer-server.mjs",
     "dev:multi": "node server/dev-multi.mjs",
-    "test": "tsc -p tsconfig.test.json && node --test tests/mapLayout.test.mjs tests/platformLayout.test.mjs tests/multiplayerRoom.test.mjs tests/multiplayerClient.test.mjs tests/staticFileResponder.test.mjs tests/snapshotBroadcaster.test.mjs",
+    "test": "tsc -p tsconfig.test.json && node --test tests/localEnv.test.mjs tests/mapLayout.test.mjs tests/mapLayoutStore.test.mjs tests/platformLayout.test.mjs tests/multiplayerRoom.test.mjs tests/multiplayerClient.test.mjs tests/staticFileResponder.test.mjs tests/snapshotBroadcaster.test.mjs",
     "build": "tsc && vite build",
     "preview": "vite preview",
     "start": "node server/multiplayer-server.mjs"

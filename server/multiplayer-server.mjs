@@ -2,17 +2,23 @@ import { createServer } from 'node:http';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { WebSocket, WebSocketServer } from 'ws';
+import { loadLocalEnvFile } from './localEnv.mjs';
 import { createMultiplayerRoom } from './multiplayerRoom.mjs';
+import {
+  normalizeServerMapLayout,
+  saveActiveMapLayoutToSupabase,
+} from './mapLayoutStore.mjs';
 import { createSnapshotBroadcaster } from './snapshotBroadcaster.mjs';
 import { createStaticFileResponder } from './staticFileResponder.mjs';
 
+const __dirname = dirname(fileURLToPath(import.meta.url));
+await loadLocalEnvFile(join(__dirname, '..', '.env.local'));
 const PORT = Number.parseInt(process.env.PORT ?? process.env.MULTIPLAYER_PORT ?? '3010', 10);
 const HOST = process.env.HOST ?? process.env.MULTIPLAYER_HOST ?? (process.env.PORT ? '0.0.0.0' : '127.0.0.1');
 const SNAPSHOT_INTERVAL_MS = 100;
 const HEARTBEAT_INTERVAL_MS = 30000;
 const CHAT_MESSAGE_MAX_LENGTH = 140;
 const ADMIN_JOIN_CODE = process.env.ADMIN_JOIN_CODE;
-const __dirname = dirname(fileURLToPath(import.meta.url));
 const distDir = join(__dirname, '..', 'dist');
 const room = createMultiplayerRoom({ adminJoinCode: ADMIN_JOIN_CODE });
 const socketsByPlayerId = new Map();
@@ -43,7 +49,25 @@ server.on('connection', (socket) => {
   });
 
   socket.on('message', (data) => {
+    void handleSocketMessage(socket, data, () => playerId, (id) => {
+      playerId = id;
+    });
+  });
+
+  socket.on('close', () => {
+    if (!playerId) {
+      return;
+    }
+
+    room.leave(playerId);
+    socketsByPlayerId.delete(playerId);
+    snapshotBroadcaster.broadcastNow();
+  });
+});
+
+async function handleSocketMessage(socket, data, getPlayerId, setPlayerId) {
     const message = parseJson(data);
+    const playerId = getPlayerId();
 
     if (!isRecord(message)) {
       return;
@@ -59,7 +83,7 @@ server.on('connection', (socket) => {
       }
 
       const player = result.player;
-      playerId = player.id;
+      setPlayerId(player.id);
       socketsByPlayerId.set(player.id, socket);
       socket.send(JSON.stringify({ type: 'player:welcome', id: player.id, player }));
       snapshotBroadcaster.broadcastNow();
@@ -89,19 +113,32 @@ server.on('connection', (socket) => {
       }
 
       sendToOpenSockets(JSON.stringify({ type: 'map:updated', version }));
-    }
-  });
-
-  socket.on('close', () => {
-    if (!playerId) {
       return;
     }
 
-    room.leave(playerId);
-    socketsByPlayerId.delete(playerId);
-    snapshotBroadcaster.broadcastNow();
-  });
-});
+    if (message.type === 'map:save' && playerId) {
+      if (!room.canPublishMapUpdate(playerId)) {
+        return;
+      }
+
+      const layout = normalizeServerMapLayout(message.layout);
+
+      if (!layout) {
+        socket.send(JSON.stringify({ type: 'map:save-failed', message: 'Invalid map layout' }));
+        return;
+      }
+
+      try {
+        const saved = await saveActiveMapLayoutToSupabase(layout);
+        sendToOpenSockets(JSON.stringify({ type: 'map:updated', version: saved.version }));
+      } catch (error) {
+        console.warn(error);
+        socket.send(JSON.stringify({ type: 'map:save-failed', message: 'Map save failed on server' }));
+      }
+
+      return;
+    }
+}
 
 server.on('listening', () => {
   console.log(`Dongstory listening on http://${HOST}:${PORT}`);

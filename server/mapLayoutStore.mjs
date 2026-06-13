@@ -46,7 +46,9 @@ export async function saveActiveMapLayoutToSupabase(layout, {
   });
 
   if (!response.ok) {
-    throw new Error(`Failed to save active map layout: ${response.status}`);
+    const detail = await readFailureDetail(response);
+
+    throw new Error(`Failed to save active map layout: ${response.status}${detail ? ` ${detail}` : ''}`);
   }
 
   const rows = await response.json();
@@ -72,6 +74,14 @@ export function normalizeServerMapLayout(value) {
 
 export function createMapSaveFailedMessage(message) {
   return JSON.stringify({ type: 'map:save-failed', message });
+}
+
+async function readFailureDetail(response) {
+  if (typeof response.text !== 'function') {
+    return '';
+  }
+
+  return (await response.text()).trim().slice(0, 240);
 }
 
 function isRecord(value) {

@@ -59,6 +59,21 @@ test('saveActiveMapLayoutToSupabase fails without server credentials', async () 
   );
 });
 
+test('saveActiveMapLayoutToSupabase includes response body on Supabase failure', async () => {
+  await assert.rejects(
+    () => saveActiveMapLayoutToSupabase(LAYOUT, {
+      supabaseUrl: 'https://example.supabase.co',
+      supabaseServiceRoleKey: 'service-secret',
+      fetcher: async () => ({
+        ok: false,
+        status: 404,
+        text: async () => '{"message":"Could not find the table public.map_layouts"}',
+      }),
+    }),
+    /Failed to save active map layout: 404 \{"message":"Could not find the table public.map_layouts"\}/,
+  );
+});
+
 test('createMapSaveFailedMessage serializes a save failure notice', () => {
   assert.equal(
     createMapSaveFailedMessage('Admin privileges required'),

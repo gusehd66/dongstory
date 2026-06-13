@@ -4,6 +4,7 @@ import {
   createDefaultEditableMapLayout,
   normalizeEditableMapLayout,
 } from '../dist-test/mapLayout.js';
+import { normalizeMapLayoutRow } from '../dist-test/mapLayoutSource.js';
 
 test('normalizeEditableMapLayout keeps valid platforms and story objects', () => {
   const layout = normalizeEditableMapLayout({
@@ -61,4 +62,25 @@ test('createDefaultEditableMapLayout creates editable platform ids', () => {
     'platform-2',
   ]);
   assert.deepEqual(layout.platforms.map((platform) => platform.x), [360, 600, 360]);
+});
+
+test('normalizeMapLayoutRow extracts active layout metadata', () => {
+  const row = normalizeMapLayoutRow({
+    id: '11111111-1111-1111-1111-111111111111',
+    version: 12,
+    layout: {
+      version: 12,
+      platforms: [{ id: 'platform-1', x: 10, y: 20, texture: 'platform' }],
+      storyObjects: [],
+      dialogues: [],
+      chairs: [],
+    },
+  });
+
+  assert.equal(row?.id, '11111111-1111-1111-1111-111111111111');
+  assert.equal(row?.layout.version, 12);
+});
+
+test('normalizeMapLayoutRow rejects rows without valid layout JSON', () => {
+  assert.equal(normalizeMapLayoutRow({ id: 'x', version: 1, layout: null }), undefined);
 });

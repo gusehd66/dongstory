@@ -42,6 +42,16 @@ test('stores the latest player movement state', () => {
   });
 });
 
+test('canPublishMapUpdate allows admins only', () => {
+  const room = createMultiplayerRoom({ adminJoinCode: 'secret' });
+  const admin = room.join('Admin', 'secret').player;
+  const guest = room.join('Guest').player;
+
+  assert.equal(room.canPublishMapUpdate(admin.id), true);
+  assert.equal(room.canPublishMapUpdate(guest.id), false);
+  assert.equal(room.canPublishMapUpdate('missing'), false);
+});
+
 test('marks players as admin only when they join with the configured admin code', () => {
   const room = createMultiplayerRoom({ adminJoinCode: 'admin' });
 

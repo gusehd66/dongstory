@@ -74,6 +74,21 @@ server.on('connection', (socket) => {
 
     if (message.type === 'chat:send' && playerId) {
       broadcastChatMessage(playerId, message.text);
+      return;
+    }
+
+    if (message.type === 'map:publish' && playerId) {
+      if (!room.canPublishMapUpdate(playerId)) {
+        return;
+      }
+
+      const version = finiteNumber(message.version);
+
+      if (version === undefined) {
+        return;
+      }
+
+      sendToOpenSockets(JSON.stringify({ type: 'map:updated', version }));
     }
   });
 
@@ -163,6 +178,10 @@ function normalizeChatText(text) {
   const trimmedText = text.trim();
 
   return trimmedText ? trimmedText.slice(0, CHAT_MESSAGE_MAX_LENGTH) : undefined;
+}
+
+function finiteNumber(value) {
+  return Number.isFinite(value) ? value : undefined;
 }
 
 function parseJson(data) {

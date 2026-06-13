@@ -35,6 +35,11 @@ export type ChatMessage = {
   sentAt: number;
 };
 
+export type MapUpdatedMessage = {
+  type: 'map:updated';
+  version: number;
+};
+
 export type MultiplayerNotice = {
   type: 'room-full' | 'connection-lost' | 'reconnecting' | 'connected';
   message: string;
@@ -44,6 +49,7 @@ export type MultiplayerConnection = {
   readonly localPlayerId?: string;
   sendPlayerUpdate: (update: LocalPlayerUpdate) => void;
   sendChatMessage: (text: string) => boolean;
+  sendMapPublish: (version: number) => boolean;
   disconnect: () => void;
 };
 
@@ -53,6 +59,7 @@ export type MultiplayerConnectionOptions = {
   adminCode?: string;
   onSnapshot: (snapshot: RoomSnapshot) => void;
   onChatMessage?: (message: ChatMessage) => void;
+  onMapUpdated?: (message: MapUpdatedMessage) => void;
   onLocalPlayerId?: (id: string) => void;
   onLocalPlayer?: (player: RemotePlayer) => void;
   onNotice?: (notice: MultiplayerNotice) => void;
@@ -94,6 +101,7 @@ export function createMultiplayerConnection({
   adminCode,
   onSnapshot,
   onChatMessage,
+  onMapUpdated,
   onLocalPlayerId,
   onLocalPlayer,
   onNotice,
@@ -149,6 +157,13 @@ export function createMultiplayerConnection({
 
       if (chatMessage) {
         onChatMessage?.(chatMessage);
+        return;
+      }
+
+      const mapUpdatedMessage = normalizeMapUpdatedMessage(message);
+
+      if (mapUpdatedMessage) {
+        onMapUpdated?.(mapUpdatedMessage);
         return;
       }
 
@@ -212,6 +227,14 @@ export function createMultiplayerConnection({
       }
 
       socket.send(JSON.stringify({ type: 'chat:send', text: normalizedText }));
+      return true;
+    },
+    sendMapPublish(version) {
+      if (!Number.isFinite(version) || socket?.readyState !== WebSocket.OPEN) {
+        return false;
+      }
+
+      socket.send(JSON.stringify({ type: 'map:publish', version }));
       return true;
     },
     disconnect() {
@@ -356,6 +379,17 @@ export function normalizeChatMessage(value: unknown): ChatMessage | undefined {
     playerName,
     text,
     sentAt,
+  };
+}
+
+export function normalizeMapUpdatedMessage(value: unknown): MapUpdatedMessage | undefined {
+  if (!isRecord(value) || value.type !== 'map:updated' || typeof value.version !== 'number' || !Number.isFinite(value.version)) {
+    return undefined;
+  }
+
+  return {
+    type: 'map:updated',
+    version: value.version,
   };
 }
 

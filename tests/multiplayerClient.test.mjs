@@ -8,6 +8,7 @@ import {
   getReconnectDelay,
   getChatBubbleText,
   normalizeChatMessage,
+  normalizeMapUpdatedMessage,
   normalizeOutgoingChatText,
   normalizePlayerName,
   normalizeMultiplayerNotice,
@@ -35,6 +36,18 @@ test('reads an admin join code from the page url', () => {
   assert.equal(getAdminJoinCode(new URL('https://example.com/game?admin=admin')), 'admin');
   assert.equal(getAdminJoinCode(new URL('https://example.com/game?admin=')), undefined);
   assert.equal(getAdminJoinCode(new URL('https://example.com/game')), undefined);
+});
+
+test('normalizeMapUpdatedMessage accepts numeric version', () => {
+  assert.deepEqual(normalizeMapUpdatedMessage({ type: 'map:updated', version: 123 }), {
+    type: 'map:updated',
+    version: 123,
+  });
+});
+
+test('normalizeMapUpdatedMessage rejects invalid messages', () => {
+  assert.equal(normalizeMapUpdatedMessage({ type: 'map:updated', version: 'bad' }), undefined);
+  assert.equal(normalizeMapUpdatedMessage({ type: 'chat:message', version: 1 }), undefined);
 });
 
 test('normalizes valid room snapshots and drops invalid players', () => {

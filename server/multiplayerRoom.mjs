@@ -91,6 +91,12 @@ export function createMultiplayerRoom({ maxPlayers = DEFAULT_MAX_PLAYERS, adminJ
     return { handled: true, messages };
   }
 
+  function canPublishMapUpdate(actorId) {
+    const actor = players.get(actorId);
+
+    return actor?.role === 'admin';
+  }
+
   return {
     join,
     update,
@@ -98,6 +104,7 @@ export function createMultiplayerRoom({ maxPlayers = DEFAULT_MAX_PLAYERS, adminJ
     getSnapshot,
     getPlayer,
     createAdminChatCommandMessages,
+    canPublishMapUpdate,
   };
 }
 

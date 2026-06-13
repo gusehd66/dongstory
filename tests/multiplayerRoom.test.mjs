@@ -42,6 +42,23 @@ test('stores the latest player movement state', () => {
   });
 });
 
+test('stores the sitting player animation state', () => {
+  const room = createMultiplayerRoom();
+  const player = room.join('Dodo');
+
+  room.update(player.id, {
+    x: 320,
+    y: 640,
+    velocityX: 0,
+    velocityY: 0,
+    floor: 3,
+    facing: 'left',
+    animation: 'sit',
+  });
+
+  assert.equal(room.getSnapshot().players[0].animation, 'sit');
+});
+
 test('canPublishMapUpdate allows admins only', () => {
   const room = createMultiplayerRoom({ adminJoinCode: 'secret' });
   const admin = room.join('Admin', 'secret').player;

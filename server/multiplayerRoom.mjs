@@ -127,7 +127,7 @@ function finiteNumber(value, fallback) {
 }
 
 function normalizeAnimation(animation, fallback) {
-  return animation === 'run' || animation === 'jump' || animation === 'crouch' || animation === 'idle'
+  return animation === 'run' || animation === 'jump' || animation === 'crouch' || animation === 'idle' || animation === 'sit'
     ? animation
     : fallback;
 }

@@ -70,6 +70,10 @@ export function normalizeServerMapLayout(value) {
   };
 }
 
+export function createMapSaveFailedMessage(message) {
+  return JSON.stringify({ type: 'map:save-failed', message });
+}
+
 function isRecord(value) {
   return typeof value === 'object' && value !== null;
 }

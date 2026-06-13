@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   createActiveMapLayoutUpsertRequest,
+  createMapSaveFailedMessage,
   saveActiveMapLayoutToSupabase,
 } from '../server/mapLayoutStore.mjs';
 
@@ -55,5 +56,12 @@ test('saveActiveMapLayoutToSupabase fails without server credentials', async () 
   await assert.rejects(
     () => saveActiveMapLayoutToSupabase(LAYOUT, { supabaseUrl: 'https://example.supabase.co' }),
     /Supabase map save config is missing/,
+  );
+});
+
+test('createMapSaveFailedMessage serializes a save failure notice', () => {
+  assert.equal(
+    createMapSaveFailedMessage('Admin privileges required'),
+    JSON.stringify({ type: 'map:save-failed', message: 'Admin privileges required' }),
   );
 });

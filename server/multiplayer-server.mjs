@@ -5,6 +5,7 @@ import { WebSocket, WebSocketServer } from 'ws';
 import { loadLocalEnvFile } from './localEnv.mjs';
 import { createMultiplayerRoom } from './multiplayerRoom.mjs';
 import {
+  createMapSaveFailedMessage,
   normalizeServerMapLayout,
   saveActiveMapLayoutToSupabase,
 } from './mapLayoutStore.mjs';
@@ -118,13 +119,14 @@ async function handleSocketMessage(socket, data, getPlayerId, setPlayerId) {
 
     if (message.type === 'map:save' && playerId) {
       if (!room.canPublishMapUpdate(playerId)) {
+        socket.send(createMapSaveFailedMessage('Admin privileges required'));
         return;
       }
 
       const layout = normalizeServerMapLayout(message.layout);
 
       if (!layout) {
-        socket.send(JSON.stringify({ type: 'map:save-failed', message: 'Invalid map layout' }));
+        socket.send(createMapSaveFailedMessage('Invalid map layout'));
         return;
       }
 
@@ -133,7 +135,7 @@ async function handleSocketMessage(socket, data, getPlayerId, setPlayerId) {
         sendToOpenSockets(JSON.stringify({ type: 'map:updated', version: saved.version }));
       } catch (error) {
         console.warn(error);
-        socket.send(JSON.stringify({ type: 'map:save-failed', message: 'Map save failed on server' }));
+        socket.send(createMapSaveFailedMessage('Map save failed on server'));
       }
 
       return;

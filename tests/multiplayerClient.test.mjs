@@ -8,6 +8,7 @@ import {
   getReconnectDelay,
   getChatBubbleText,
   normalizeChatMessage,
+  normalizeMapSaveFailedMessage,
   normalizeMapUpdatedMessage,
   normalizeOutgoingChatText,
   normalizePlayerName,
@@ -48,6 +49,21 @@ test('normalizeMapUpdatedMessage accepts numeric version', () => {
 test('normalizeMapUpdatedMessage rejects invalid messages', () => {
   assert.equal(normalizeMapUpdatedMessage({ type: 'map:updated', version: 'bad' }), undefined);
   assert.equal(normalizeMapUpdatedMessage({ type: 'chat:message', version: 1 }), undefined);
+});
+
+test('normalizeMapSaveFailedMessage accepts server save failures', () => {
+  assert.deepEqual(normalizeMapSaveFailedMessage({
+    type: 'map:save-failed',
+    message: 'Admin privileges required',
+  }), {
+    type: 'map:save-failed',
+    message: 'Admin privileges required',
+  });
+});
+
+test('normalizeMapSaveFailedMessage rejects invalid save failures', () => {
+  assert.equal(normalizeMapSaveFailedMessage({ type: 'map:save-failed', message: 123 }), undefined);
+  assert.equal(normalizeMapSaveFailedMessage({ type: 'map:updated', message: 'nope' }), undefined);
 });
 
 test('normalizes valid room snapshots and drops invalid players', () => {

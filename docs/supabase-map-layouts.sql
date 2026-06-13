@@ -12,6 +12,9 @@ create unique index if not exists map_layouts_one_active
   on public.map_layouts (is_active)
   where is_active = true;
 
+create unique index if not exists map_layouts_unique_name
+  on public.map_layouts (name);
+
 create or replace function public.set_map_layouts_updated_at()
 returns trigger
 language plpgsql

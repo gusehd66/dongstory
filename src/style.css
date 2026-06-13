@@ -449,3 +449,98 @@ canvas {
   font-weight: 800;
   line-height: 1.45;
 }
+
+.editor-shell {
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr);
+  min-height: 100vh;
+  background: #f5f7fb;
+  color: #18202a;
+  font-family: system-ui, Segoe UI, sans-serif;
+}
+
+.editor-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 18px;
+  border-right: 1px solid #d8e0ea;
+  background: #ffffff;
+}
+
+.editor-panel__header h1 {
+  margin: 0;
+  font-size: 22px;
+  letter-spacing: 0;
+}
+
+.editor-panel__header p {
+  margin: 6px 0 0;
+  color: #526070;
+  font-size: 13px;
+}
+
+.editor-tools {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+.editor-tools__button,
+.editor-actions button {
+  min-height: 36px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #f8fafc;
+  color: #18202a;
+  font: inherit;
+  font-weight: 800;
+}
+
+.editor-tools__button.is-active {
+  background: #1f7a8c;
+  border-color: #1f7a8c;
+  color: #ffffff;
+}
+
+.editor-form {
+  display: grid;
+  gap: 12px;
+}
+
+.editor-form label {
+  display: grid;
+  gap: 5px;
+  color: #526070;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.editor-form input,
+.editor-form textarea {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  padding: 8px 10px;
+  color: #18202a;
+  font: inherit;
+}
+
+.editor-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: auto;
+}
+
+.editor-canvas {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.editor-canvas canvas {
+  display: block;
+  width: 100%;
+  height: 100vh;
+}

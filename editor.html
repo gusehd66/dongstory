@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Dongstory Map Editor</title>
+  </head>
+  <body>
+    <div id="editor-shell" class="editor-shell">
+      <aside class="editor-panel" aria-label="Map editor tools">
+        <header class="editor-panel__header">
+          <h1>Map Editor</h1>
+          <p id="editor-status">Loading</p>
+        </header>
+        <div class="editor-tools" role="toolbar" aria-label="Place tools">
+          <button id="tool-select" class="editor-tools__button is-active" type="button">Select</button>
+          <button id="tool-platform" class="editor-tools__button" type="button">Platform</button>
+          <button id="tool-object" class="editor-tools__button" type="button">Object</button>
+        </div>
+        <form id="editor-form" class="editor-form">
+          <label>
+            Label
+            <input id="editor-label" type="text" maxlength="40" value="Ready" />
+          </label>
+          <label>
+            Title
+            <input id="editor-title" type="text" maxlength="80" />
+          </label>
+          <label>
+            Description
+            <textarea id="editor-description" rows="5"></textarea>
+          </label>
+        </form>
+        <div class="editor-actions">
+          <button id="delete-selected" type="button">Delete</button>
+          <button id="save-map" type="button">Save</button>
+        </div>
+      </aside>
+      <main id="editor-canvas" class="editor-canvas" aria-label="Editable map preview"></main>
+    </div>
+    <script type="module" src="/src/mapEditor.ts"></script>
+  </body>
+</html>

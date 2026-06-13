@@ -5,7 +5,10 @@ import {
   normalizeEditableMapLayout,
   toPlatformDefinitions,
 } from '../dist-test/mapLayout.js';
-import { normalizeMapLayoutRow } from '../dist-test/mapLayoutSource.js';
+import {
+  createActiveMapLayoutSavePath,
+  normalizeMapLayoutRow,
+} from '../dist-test/mapLayoutSource.js';
 
 test('normalizeEditableMapLayout keeps valid platforms and story objects', () => {
   const layout = normalizeEditableMapLayout({
@@ -84,6 +87,10 @@ test('normalizeMapLayoutRow extracts active layout metadata', () => {
 
 test('normalizeMapLayoutRow rejects rows without valid layout JSON', () => {
   assert.equal(normalizeMapLayoutRow({ id: 'x', version: 1, layout: null }), undefined);
+});
+
+test('createActiveMapLayoutSavePath saves by active map name conflict', () => {
+  assert.equal(createActiveMapLayoutSavePath(), 'map_layouts?on_conflict=name');
 });
 
 test('toPlatformDefinitions removes editor ids for game physics', () => {

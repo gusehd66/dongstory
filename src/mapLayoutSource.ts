@@ -41,7 +41,7 @@ export async function loadActiveMapLayout(config = getMapLayoutSourceConfig()): 
 
 export async function saveActiveMapLayout(layout: EditableMapLayout, config = getMapLayoutSourceConfig()): Promise<MapLayoutRow> {
   const versionedLayout = { ...layout, version: Date.now() };
-  const request = createSupabaseRequest(config, TABLE_NAME);
+  const request = createSupabaseRequest(config, createActiveMapLayoutSavePath());
 
   if (!request) {
     throw new Error('Supabase map layout config is missing');
@@ -88,6 +88,10 @@ export function normalizeMapLayoutRow(value: unknown): MapLayoutRow | undefined 
   return layout && version !== undefined
     ? { id: value.id, version, layout: { ...layout, version } }
     : undefined;
+}
+
+export function createActiveMapLayoutSavePath() {
+  return `${TABLE_NAME}?on_conflict=name`;
 }
 
 function createSupabaseRequest({ supabaseUrl, supabaseAnonKey, fetcher = fetch }: MapLayoutSourceConfig, path: string) {

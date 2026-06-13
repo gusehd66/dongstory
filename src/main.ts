@@ -22,6 +22,7 @@ import {
 import {
   createDefaultEditableMapLayout,
   toPlatformDefinitions,
+  type EditableChairDefinition,
   type EditableMapLayout,
 } from './mapLayout';
 import { loadActiveMapLayout } from './mapLayoutSource';
@@ -259,16 +260,8 @@ const DEFAULT_EDITABLE_MAP_LAYOUT = createDefaultEditableMapLayout({
 });
 let activeMapLayout: EditableMapLayout = await loadActiveMapLayoutSafely(DEFAULT_EDITABLE_MAP_LAYOUT);
 let PLATFORM_DEFINITIONS = toPlatformDefinitions(activeMapLayout);
-let DONG_CHAIR_DEFINITION = createChairDefinition(PLATFORM_DEFINITIONS, {
-  id: 'dong-chair',
-  platformIndex: DONG_CHAIR_PLATFORM_INDEX,
-  facing: DONG_CHAIR_FACING,
-  xOffset: DONG_CHAIR_X_OFFSET,
-  yOffset: DONG_CHAIR_Y_OFFSET,
-  seatXOffset: DONG_CHAIR_SEAT_X_OFFSET,
-  seatYOffset: DONG_CHAIR_SEAT_Y_OFFSET,
-  triggerDistance: DONG_CHAIR_TRIGGER_DISTANCE,
-});
+let CHAIR_DEFINITIONS = createChairDefinitionsForLayout(activeMapLayout);
+let CHAIR_DEFINITIONS_BY_PLATFORM_INDEX = createChairDefinitionIndex(CHAIR_DEFINITIONS);
 
 let STORY_OBJECT_DEFINITIONS = createStoryObjectDefinitionsForLayout(activeMapLayout);
 let STORY_OBJECT_DEFINITIONS_BY_PLATFORM_INDEX = createStoryObjectDefinitionIndex(STORY_OBJECT_DEFINITIONS);
@@ -309,7 +302,8 @@ class MainScene extends Phaser.Scene {
   private activePlatformViews = new Map<number, PlatformView>();
   private activeStoryObjectViews = new Map<number, StoryObjectView>();
   private activeStoryDialogueViews = new Map<number, StoryDialogueView>();
-  private activeChairView?: ChairView;
+  private activeChairViews = new Map<string, ChairView>();
+  private seatedChairId?: string;
   private remotePlayerViews = new Map<string, RemotePlayerView>();
   private chatBubbleViews = new Map<string, ChatBubbleView>();
   private loadingStoryPhotoTextureKeys = new Set<string>();
@@ -512,7 +506,7 @@ class MainScene extends Phaser.Scene {
       .setVisible(false) as Phaser.Physics.Arcade.Sprite;
 
     this.activePlatformViews.set(index, { visual, collider });
-    this.createDongChair(index);
+    this.createChairs(index);
     this.createStoryObject(index);
     this.createStoryDialogue(index);
   }
@@ -526,14 +520,18 @@ class MainScene extends Phaser.Scene {
       this.activePlatformViews.delete(index);
     }
 
-    if (this.activeChairView?.definition.platformIndex === index) {
-      this.activeChairView.sprite.destroy();
-      this.activeChairView = undefined;
+    this.activeChairViews.forEach((chairView, id) => {
+      if (chairView.definition.platformIndex !== index) {
+        return;
+      }
 
-      if (this.isSeated) {
+      chairView.sprite.destroy();
+      this.activeChairViews.delete(id);
+
+      if (this.seatedChairId === id) {
         this.leaveChair();
       }
-    }
+    });
 
     const storyObjectView = this.activeStoryObjectViews.get(index);
 
@@ -572,17 +570,25 @@ class MainScene extends Phaser.Scene {
     this.ensureStoryPhotoTexture(index, definition);
   }
 
-  private createDongChair(index: number) {
-    if (!DONG_CHAIR_DEFINITION || this.activeChairView || index !== DONG_CHAIR_DEFINITION.platformIndex) {
+  private createChairs(index: number) {
+    const definitions = CHAIR_DEFINITIONS_BY_PLATFORM_INDEX.get(index) ?? [];
+
+    if (definitions.length === 0) {
       return;
     }
 
-    const sprite = this.add
-      .image(DONG_CHAIR_DEFINITION.x, DONG_CHAIR_DEFINITION.y, 'dong-chair')
-      .setDisplaySize(DONG_CHAIR_DISPLAY_SIZE, DONG_CHAIR_DISPLAY_SIZE)
-      .setDepth(4);
+    definitions.forEach((definition) => {
+      if (this.activeChairViews.has(definition.id)) {
+        return;
+      }
 
-    this.activeChairView = { definition: DONG_CHAIR_DEFINITION, sprite };
+      const sprite = this.add
+        .image(definition.x, definition.y, 'dong-chair')
+        .setDisplaySize(DONG_CHAIR_DISPLAY_SIZE, DONG_CHAIR_DISPLAY_SIZE)
+        .setDepth(4);
+
+      this.activeChairViews.set(definition.id, { definition, sprite });
+    });
   }
 
   private createStoryDialogue(index: number) {
@@ -747,21 +753,30 @@ class MainScene extends Phaser.Scene {
       return;
     }
 
-    if (!wantsInteract || !this.activeChairView) {
+    if (!wantsInteract) {
       return;
     }
 
-    if (!isNearChairSeat({ x: body.center.x, y: body.center.y }, this.activeChairView.definition)) {
+    const activeChair = this.getNearActiveChair(body.center.x, body.center.y);
+
+    if (!activeChair) {
       return;
     }
 
-    this.sitInChair(this.activeChairView.definition);
+    this.sitInChair(activeChair.definition);
+  }
+
+  private getNearActiveChair(playerX: number, playerY: number) {
+    const playerPoint = { x: playerX, y: playerY };
+
+    return [...this.activeChairViews.values()].find(({ definition }) => isNearChairSeat(playerPoint, definition));
   }
 
   private sitInChair(chair: ChairDefinition) {
     const body = this.player.body as Phaser.Physics.Arcade.Body;
 
     this.isSeated = true;
+    this.seatedChairId = chair.id;
     body.allowGravity = false;
     this.player.setAcceleration(0, 0);
     this.player.setVelocity(0, 0);
@@ -776,6 +791,7 @@ class MainScene extends Phaser.Scene {
     const body = this.player.body as Phaser.Physics.Arcade.Body;
 
     this.isSeated = false;
+    this.seatedChairId = undefined;
     body.allowGravity = true;
     this.player.setAcceleration(0, 0);
     this.player.setVelocity(0, 0);
@@ -991,16 +1007,8 @@ class MainScene extends Phaser.Scene {
 
     activeMapLayout = nextLayout;
     PLATFORM_DEFINITIONS = toPlatformDefinitions(nextLayout);
-    DONG_CHAIR_DEFINITION = createChairDefinition(PLATFORM_DEFINITIONS, {
-      id: 'dong-chair',
-      platformIndex: DONG_CHAIR_PLATFORM_INDEX,
-      facing: DONG_CHAIR_FACING,
-      xOffset: DONG_CHAIR_X_OFFSET,
-      yOffset: DONG_CHAIR_Y_OFFSET,
-      seatXOffset: DONG_CHAIR_SEAT_X_OFFSET,
-      seatYOffset: DONG_CHAIR_SEAT_Y_OFFSET,
-      triggerDistance: DONG_CHAIR_TRIGGER_DISTANCE,
-    });
+    CHAIR_DEFINITIONS = createChairDefinitionsForLayout(nextLayout);
+    CHAIR_DEFINITIONS_BY_PLATFORM_INDEX = createChairDefinitionIndex(CHAIR_DEFINITIONS);
     STORY_OBJECT_DEFINITIONS = createStoryObjectDefinitionsForLayout(nextLayout);
     STORY_OBJECT_DEFINITIONS_BY_PLATFORM_INDEX = createStoryObjectDefinitionIndex(STORY_OBJECT_DEFINITIONS);
     STORY_DIALOGUE_DEFINITIONS = createStoryDialogueDefinitionsForLayout(nextLayout);
@@ -1553,12 +1561,46 @@ function createStoryDialogueDefinitionsForLayout(layout: EditableMapLayout) {
     });
 }
 
+function createChairDefinitionsForLayout(layout: EditableMapLayout): ChairDefinition[] {
+  if (layout.chairs.length > 0) {
+    return layout.chairs.map(toChairDefinition);
+  }
+
+  const fallbackChair = createChairDefinition(PLATFORM_DEFINITIONS, {
+    id: 'dong-chair',
+    platformIndex: DONG_CHAIR_PLATFORM_INDEX,
+    facing: DONG_CHAIR_FACING,
+    xOffset: DONG_CHAIR_X_OFFSET,
+    yOffset: DONG_CHAIR_Y_OFFSET,
+    seatXOffset: DONG_CHAIR_SEAT_X_OFFSET,
+    seatYOffset: DONG_CHAIR_SEAT_Y_OFFSET,
+    triggerDistance: DONG_CHAIR_TRIGGER_DISTANCE,
+  });
+
+  return fallbackChair ? [fallbackChair] : [];
+}
+
+function toChairDefinition(chair: EditableChairDefinition): ChairDefinition {
+  return {
+    ...chair,
+    platformIndex: getNearestPlatformIndex(chair.x, chair.y) ?? 0,
+  };
+}
+
 function createStoryObjectDefinitionIndex(definitions: StoryObjectDefinition[]) {
   return new Map(definitions.flatMap((definition) => {
     const index = getDefinitionPlatformIndex(definition, 'story-object-');
 
     return index === undefined ? [] : [[index, definition] as const];
   }));
+}
+
+function createChairDefinitionIndex(definitions: ChairDefinition[]) {
+  return definitions.reduce<Map<number, ChairDefinition[]>>((index, definition) => {
+    index.set(definition.platformIndex, [...(index.get(definition.platformIndex) ?? []), definition]);
+
+    return index;
+  }, new Map());
 }
 
 function createStoryDialogueDefinitionIndex(definitions: StoryDialogueDefinition[]) {

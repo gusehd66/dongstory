@@ -17,6 +17,23 @@
           <button id="tool-platform" class="editor-tools__button" type="button">Platform</button>
           <button id="tool-object" class="editor-tools__button" type="button">Object</button>
         </div>
+        <div class="editor-palette" aria-label="Object types">
+          <button id="kind-photo" class="editor-palette__button is-active" type="button">Photo</button>
+          <button id="kind-dialogue" class="editor-palette__button" type="button">Dialogue</button>
+          <button id="kind-chair" class="editor-palette__button" type="button">Chair</button>
+        </div>
+        <section class="editor-section" aria-label="Map position">
+          <div class="editor-section__title">Map Position</div>
+          <div class="editor-meter">
+            <div class="editor-meter__track">
+              <div id="editor-scroll-thumb" class="editor-meter__thumb"></div>
+            </div>
+            <div>
+              <strong id="editor-floor">Floor 0</strong>
+              <span id="editor-y">Y 0 / 0</span>
+            </div>
+          </div>
+        </section>
         <form id="editor-form" class="editor-form">
           <label>
             Label
@@ -30,7 +47,26 @@
             Description
             <textarea id="editor-description" rows="5"></textarea>
           </label>
+          <label>
+            Speaker
+            <input id="editor-speaker" type="text" maxlength="40" />
+          </label>
+          <label>
+            Message
+            <textarea id="editor-message" rows="4"></textarea>
+          </label>
+          <label>
+            Facing
+            <select id="editor-facing">
+              <option value="left">Left</option>
+              <option value="right">Right</option>
+            </select>
+          </label>
         </form>
+        <section class="editor-section" aria-label="Placed items">
+          <div class="editor-section__title">Placed Items</div>
+          <div id="editor-item-list" class="editor-item-list"></div>
+        </section>
         <div class="editor-actions">
           <button id="delete-selected" type="button">Delete</button>
           <button id="save-map" type="button">Save</button>

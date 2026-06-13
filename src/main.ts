@@ -136,6 +136,7 @@ const CHAT_BUBBLE_PADDING_X = 10;
 const CHAT_BUBBLE_PADDING_Y = 7;
 const CHAT_BUBBLE_Y_OFFSET = 112;
 const PLAYER_VISUAL_FOOT_OFFSET = 5;
+const SPRITE_ASSET_VERSION = '20260613-sit-cache-bust';
 const BACKGROUND_ASSET_URLS = [
   '/assets/background.png',
   '/assets/background2.png',
@@ -330,9 +331,9 @@ class MainScene extends Phaser.Scene {
     });
     this.load.image('ground', '/assets/ground.png');
     this.load.image('stool', '/assets/stool1.png');
-    this.load.image('dong-chair', '/assets/dong-chair.png');
-    this.load.image(PLAYER_ADMIN_TEXTURE_KEY, '/assets/player-admin-transparent.png');
-    this.load.image(PLAYER_NORMAL_TEXTURE_KEY, '/assets/player-normal2-transparent.png');
+    this.load.image('dong-chair', versionedAssetUrl('/assets/dong-chair.png'));
+    this.load.image(PLAYER_ADMIN_TEXTURE_KEY, versionedAssetUrl('/assets/player-admin-transparent.png'));
+    this.load.image(PLAYER_NORMAL_TEXTURE_KEY, versionedAssetUrl('/assets/player-normal2-transparent.png'));
     this.createRectTexture('player-body', 46, 58, 0x2f80ed);
     this.createRectTexture('ground-collider', GROUND_VISUAL_WIDTH, GROUND_COLLIDER_HEIGHT, 0x00ff00);
     PLATFORM_VISUAL_VARIANTS.forEach(({ colliderKey, colliderWidth }) => {
@@ -1633,6 +1634,10 @@ function getNearestPlatformIndex(x: number, y: number) {
 
     return distance < nearestDistance ? index : nearestIndex;
   }, 0);
+}
+
+function versionedAssetUrl(path: string) {
+  return `${path}?v=${SPRITE_ASSET_VERSION}`;
 }
 
 const config: Phaser.Types.Core.GameConfig = {
